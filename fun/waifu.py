@@ -53,24 +53,28 @@ def _is_nsfw_enabled(chat_id: int, chat_type: str) -> bool:
         con.close()
 
 
-def _cleanup(chat_id):
+def _state_key(chat_id: int, user_id: int):
+    return f"{int(chat_id)}:{int(user_id)}"
+
+
+def _cleanup(key):
     now = time.time()
-    ts = _WAIFU_TS.get(chat_id)
+    ts = _WAIFU_TS.get(key)
     if not ts or now - ts > EXPIRE_SEC:
-        _WAIFU_HISTORY.pop(chat_id, None)
-        _WAIFU_LAST_TAG.pop(chat_id, None)
-        _WAIFU_TS.pop(chat_id, None)
+        _WAIFU_HISTORY.pop(key, None)
+        _WAIFU_LAST_TAG.pop(key, None)
+        _WAIFU_TS.pop(key, None)
 
 
-def _push(chat_id, img):
-    _cleanup(chat_id)
-    _WAIFU_HISTORY.setdefault(chat_id, []).append(img)
-    _WAIFU_TS[chat_id] = time.time()
+def _push(key, img):
+    _cleanup(key)
+    _WAIFU_HISTORY.setdefault(key, []).append(img)
+    _WAIFU_TS[key] = time.time()
 
 
-def _pop(chat_id):
-    _cleanup(chat_id)
-    hist = _WAIFU_HISTORY.get(chat_id, [])
+def _pop(key):
+    _cleanup(key)
+    hist = _WAIFU_HISTORY.get(key, [])
     if len(hist) < 2:
         return None
     hist.pop()
@@ -87,20 +91,65 @@ def _build_caption(img, tag):
     return cap
 
 
-def _build_kb(img):
+def _build_kb(chat_id: int, user_id: int, img):
+    prefix = f"waifu:{int(chat_id)}:{int(user_id)}"
     rows = [[
-        InlineKeyboardButton("⏪ Pref", callback_data="waifu_pref"),
-        InlineKeyboardButton("▶️ Next", callback_data="waifu_next")
+        InlineKeyboardButton("⏪ Pref", callback_data=f"{prefix}:pref"),
+        InlineKeyboardButton("▶️ Next", callback_data=f"{prefix}:next")
     ]]
     if img.get("source"):
         rows.append([InlineKeyboardButton("🔗 Source", url=img["source"])])
     return InlineKeyboardMarkup(rows)
 
 
+def _parse_cb(data: str):
+    parts = (data or "").split(":")
+    if len(parts) != 4:
+        return None
+    if parts[0] != "waifu":
+        return None
+    try:
+        chat_id = int(parts[1])
+        user_id = int(parts[2])
+    except Exception:
+        return None
+    action = parts[3]
+    if action not in ("next", "pref"):
+        return None
+    return chat_id, user_id, action
+
+
+async def _fetch_waifu(tag: str | None):
+    params = {
+        "IsNsfw": "All",
+        "Gif": "False"
+    }
+
+    if tag:
+        params["IncludedTags"] = tag
+
+    session = await get_http_session()
+    async with session.get(
+        "https://api.waifu.im/images",
+        params=params,
+        timeout=aiohttp.ClientTimeout(total=15)
+    ) as resp:
+        if resp.status != 200:
+            return None, resp.status
+        data = await resp.json()
+
+    images = data.get("items")
+    if not images:
+        return None, 200
+
+    return images[0], 200
+
+
 async def waifu_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     chat = update.effective_chat
-    if not msg or not chat:
+    user = update.effective_user
+    if not msg or not chat or not user:
         return
 
     if not _is_nsfw_enabled(chat.id, chat.type):
@@ -129,74 +178,56 @@ async def waifu_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyword = context.args[0].lower()
     tag = None if keyword == "random" else keyword
-    _WAIFU_LAST_TAG[chat.id] = tag
-    _cleanup(chat.id)
 
-    params = {
-        "IsNsfw": "All",
-        "Gif": "False"
-    }
+    key = _state_key(chat.id, user.id)
+    _WAIFU_LAST_TAG[key] = tag
+    _cleanup(key)
 
-    if tag:
-        params["IncludedTags"] = tag
-
-    session = await get_http_session()
-    async with session.get(
-        "https://api.waifu.im/images",
-        params=params,
-        timeout=aiohttp.ClientTimeout(total=15)
-    ) as resp:
-        if resp.status != 200:
-            return await msg.reply_text(f"❌ API Error ({resp.status})")
-        data = await resp.json()
-
-    images = data.get("items")
-    if not images:
+    img, status = await _fetch_waifu(tag)
+    if status != 200:
+        return await msg.reply_text(f"❌ API Error ({status})")
+    if not img:
         return await msg.reply_text("❌ Waifu tidak ditemukan 😭")
 
-    img = images[0]
-    _push(chat.id, img)
+    _push(key, img)
 
     await msg.reply_photo(
         photo=img["url"],
         caption=_build_caption(img, tag),
         parse_mode="HTML",
-        reply_markup=_build_kb(img)
+        reply_markup=_build_kb(chat.id, user.id, img)
     )
 
 
 async def waifu_next_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
+    if not q or not q.message:
+        return
     await q.answer()
 
-    chat_id = q.message.chat_id
-    _cleanup(chat_id)
-    tag = _WAIFU_LAST_TAG.get(chat_id)
+    parsed = _parse_cb(q.data)
+    if not parsed:
+        return
 
-    params = {
-        "IsNsfw": "All",
-        "Gif": "False"
-    }
+    chat_id, owner_id, action = parsed
+    user = update.effective_user
+    if not user:
+        return
 
-    if tag:
-        params["IncludedTags"] = tag
+    if user.id != owner_id:
+        return await q.answer("Bukan punya lu goblok.", show_alert=True)
 
-    session = await get_http_session()
-    async with session.get(
-        "https://api.waifu.im/images",
-        params=params,
-        timeout=aiohttp.ClientTimeout(total=15)
-    ) as resp:
-        if resp.status != 200:
-            return await q.answer("API error 😭", show_alert=True)
-        data = await resp.json()
+    key = _state_key(chat_id, owner_id)
+    _cleanup(key)
+    tag = _WAIFU_LAST_TAG.get(key)
 
-    images = data.get("items")
-    if not images:
-        return await q.answer("Waifu kosong 😭", show_alert=True)
+    img, status = await _fetch_waifu(tag)
+    if status != 200:
+        return await q.answer("API error", show_alert=True)
+    if not img:
+        return await q.answer("Waifu kosong memek", show_alert=True)
 
-    img = images[0]
-    _push(chat_id, img)
+    _push(key, img)
 
     await q.message.edit_media(
         media=InputMediaPhoto(
@@ -204,20 +235,34 @@ async def waifu_next_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             caption=_build_caption(img, tag),
             parse_mode="HTML"
         ),
-        reply_markup=_build_kb(img)
+        reply_markup=_build_kb(chat_id, owner_id, img)
     )
 
 
 async def waifu_pref_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
+    if not q or not q.message:
+        return
     await q.answer()
 
-    chat_id = q.message.chat_id
-    img = _pop(chat_id)
-    if not img:
-        return await q.answer("Ga ada waifu sebelumnya 😭", show_alert=True)
+    parsed = _parse_cb(q.data)
+    if not parsed:
+        return
 
-    tag = _WAIFU_LAST_TAG.get(chat_id)
+    chat_id, owner_id, action = parsed
+    user = update.effective_user
+    if not user:
+        return
+
+    if user.id != owner_id:
+        return await q.answer("Bukan punya lu goblok.", show_alert=True)
+
+    key = _state_key(chat_id, owner_id)
+    img = _pop(key)
+    if not img:
+        return await q.answer("Ga ada waifu sebelumnya anjing", show_alert=True)
+
+    tag = _WAIFU_LAST_TAG.get(key)
 
     await q.message.edit_media(
         media=InputMediaPhoto(
@@ -225,7 +270,7 @@ async def waifu_pref_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             caption=_build_caption(img, tag),
             parse_mode="HTML"
         ),
-        reply_markup=_build_kb(img)
+        reply_markup=_build_kb(chat_id, owner_id, img)
     )
 
 
