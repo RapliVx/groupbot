@@ -19,12 +19,35 @@ apt install -y \
   git \
   ffmpeg \
   curl \
+  unzip \
   build-essential \
   libjpeg-dev \
   zlib1g-dev
 
 echo
-echo "[2/5] Installing Speedtest Ookla..."
+echo "[2/5] Installing Node.js..."
+
+if ! command -v node >/dev/null 2>&1; then
+  curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+  apt install -y nodejs
+  echo "✔ Node.js installed"
+else
+  echo "✔ Node.js already installed"
+fi
+
+echo
+echo "[3/5] Installing Deno..."
+
+if ! command -v deno >/dev/null 2>&1; then
+  curl -fsSL https://deno.land/install.sh | sh
+  ln -sf /root/.deno/bin/deno /usr/local/bin/deno
+  echo "✔ Deno installed"
+else
+  echo "✔ Deno already installed"
+fi
+
+echo
+echo "[4/5] Installing Speedtest Ookla..."
 
 if ! command -v speedtest >/dev/null 2>&1; then
   ARCH=$(uname -m)
@@ -52,7 +75,7 @@ else
 fi
 
 echo
-echo "[3/5] Creating virtual environment..."
+echo "[5/5] Creating virtual environment..."
 
 if [ ! -d "venv" ]; then
   python3 -m venv venv
@@ -61,14 +84,14 @@ fi
 source venv/bin/activate
 
 echo
-echo "[4/5] Installing Python dependencies..."
+echo "[6/6] Installing Python dependencies..."
 pip install --upgrade pip
 pip install -r requirements.txt
 
 deactivate
 
 echo
-echo "[5/5] Done!"
+echo "Done!"
 echo
 echo "Next steps:"
 echo "1. nano .env"
