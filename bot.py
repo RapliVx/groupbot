@@ -100,6 +100,7 @@ def main():
         .base_url("http://127.0.0.1:8081/bot")
         .base_file_url("http://127.0.0.1:8081/file/bot")
         .job_queue(JobQueue())
+        .concurrent_updates(True)
         .connect_timeout(30)
         .read_timeout(60 * 20)
         .write_timeout(60 * 20)
