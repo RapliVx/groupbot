@@ -27,6 +27,7 @@ from .worker import download_non_tiktok, send_downloaded_media
 os.makedirs(TMP_DIR, exist_ok=True)
 
 TIKTOK_LOCK = asyncio.Lock()
+YTDLP_SEM = asyncio.Semaphore(3)
 
 def is_youtube(url: str) -> bool:
     return any(x in (url or "") for x in ("youtube.com", "youtu.be", "music.youtube.com"))
@@ -248,15 +249,16 @@ async def _dl_worker(app, chat_id, reply_to, raw_url, fmt_key, status_msg_id, fo
             if sent:
                 return
         else:
-            path = await download_non_tiktok(
-                raw_url=raw_url,
-                fmt_key=fmt_key,
-                bot=bot,
-                chat_id=chat_id,
-                status_msg_id=status_msg_id,
-                format_id=format_id,
-                has_audio=has_audio,
-            )
+            async with YTDLP_SEM:
+                path = await download_non_tiktok(
+                    raw_url=raw_url,
+                    fmt_key=fmt_key,
+                    bot=bot,
+                    chat_id=chat_id,
+                    status_msg_id=status_msg_id,
+                    format_id=format_id,
+                    has_audio=has_audio,
+                )
 
         await send_downloaded_media(
             bot=bot,

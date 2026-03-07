@@ -19,11 +19,13 @@ def _is_instagram(url: str) -> bool:
         return "instagram.com" in (url or "").lower()
 
 
-def _pick_latest_media_file(since_ts: float) -> str | None:
+def _pick_latest_media_file(since_ts: float, prefix: str) -> str | None:
     exts = (".mp4", ".mp3", ".jpg", ".jpeg", ".png", ".webp")
     try:
         files = []
         for f in os.listdir(TMP_DIR):
+            if not f.startswith(prefix + "_"):
+                continue
             p = os.path.join(TMP_DIR, f)
             if not os.path.isfile(p):
                 continue
@@ -51,6 +53,7 @@ def _probe_total_size_sync(url: str, fmt: str) -> int:
     cmd = [
         YT_DLP,
         "--cookies", COOKIES_PATH,
+        "--extractor-args", "youtube:player_client=web",
         "--no-playlist",
         "-J",
         "-f", fmt,
@@ -100,7 +103,10 @@ async def ytdlp_download(
     if not YT_DLP:
         raise RuntimeError("yt-dlp not found in PATH")
 
-    out_tpl = f"{TMP_DIR}/%(title)s.%(ext)s"
+    os.makedirs(TMP_DIR, exist_ok=True)
+
+    job_id = uuid.uuid4().hex[:10]
+    out_tpl = f"{TMP_DIR}/{job_id}_%(title)s.%(ext)s"
     update_interval = 3
     is_ig = _is_instagram(url)
 
@@ -175,6 +181,8 @@ async def ytdlp_download(
             YT_DLP,
             "--cookies", COOKIES_PATH,
             "--js-runtimes", "deno:/root/.deno/bin/deno",
+            "--extractor-args", "youtube:player_client=web",
+            "--concurrent-fragments", "8",
             "--no-playlist",
             "-f", "bestaudio/best",
             "--extract-audio",
@@ -205,6 +213,8 @@ async def ytdlp_download(
             YT_DLP,
             "--cookies", COOKIES_PATH,
             "--js-runtimes", "deno:/root/.deno/bin/deno",
+            "--extractor-args", "youtube:player_client=web",
+            "--concurrent-fragments", "8",
             "--no-playlist",
             "-f", fmt,
             "--merge-output-format", "mp4",
@@ -221,7 +231,7 @@ async def ytdlp_download(
 
         if code != 0:
             if is_ig:
-                picked = _pick_latest_media_file(start_ts)
+                picked = _pick_latest_media_file(start_ts, job_id)
                 if picked:
                     return picked
 
@@ -231,6 +241,7 @@ async def ytdlp_download(
             cmd2 = [
                 YT_DLP,
                 "--cookies", COOKIES_PATH,
+                "--extractor-args", "youtube:player_client=web",
                 "--no-playlist",
                 "-f", "bestimage",
                 "-o", out_tpl,
@@ -244,7 +255,7 @@ async def ytdlp_download(
 
             if code2 != 0:
                 if is_ig:
-                    picked = _pick_latest_media_file(start_ts)
+                    picked = _pick_latest_media_file(start_ts, job_id)
                     if picked:
                         return picked
                 return None
@@ -263,7 +274,8 @@ async def ytdlp_download(
         (
             os.path.join(TMP_DIR, f)
             for f in os.listdir(TMP_DIR)
-            if f.lower().endswith((".mp4", ".mp3", ".jpg", ".jpeg", ".png", ".webp"))
+            if f.startswith(job_id + "_")
+            and f.lower().endswith((".mp4", ".mp3", ".jpg", ".jpeg", ".png", ".webp"))
         ),
         key=lambda p: (media_priority(p), -os.path.getmtime(p)),
     )
