@@ -10,8 +10,35 @@ from .constants import TMP_DIR
 from .utils import sanitize_filename, progress_bar, is_invalid_video
 from .worker import reencode_mp3
 
+
 def is_tiktok(url: str) -> bool:
     return any(x in (url or "") for x in ("tiktok.com", "vt.tiktok.com", "vm.tiktok.com"))
+
+
+def _build_expandable_caption(title: str, desc: str, bot_name: str, max_len: int = 1024) -> str:
+    clean_title = (title or "TikTok Video").strip()
+    clean_desc = (desc or "").strip()
+    safe_bot = html.escape(bot_name or "Bot")
+
+    if not clean_desc or clean_desc == clean_title:
+        clean_desc = "Tap to expand."
+
+    prefix = f"🎬 <b>{html.escape(clean_title)}</b>\n\n"
+    suffix = f"\n\n🪄 <i>Powered by {safe_bot}</i>"
+    block_open = "<blockquote expandable>"
+    block_close = "</blockquote>"
+
+    full = f"{prefix}{block_open}{html.escape(clean_desc)}{block_close}{suffix}"
+    if len(full) <= max_len:
+        return full
+
+    allowed = max_len - len(prefix) - len(suffix) - len(block_open) - len(block_close) - 3
+    if allowed < 1:
+        allowed = 1
+
+    short_desc = clean_desc[:allowed].rstrip() + "..."
+    return f"{prefix}{block_open}{html.escape(short_desc)}{block_close}{suffix}"
+
 
 async def douyin_download(url, bot, chat_id, status_msg_id):
     session = await get_http_session()
@@ -71,6 +98,7 @@ async def douyin_download(url, bot, chat_id, status_msg_id):
                     last = time.time()
 
     return out_path
+
 
 async def tiktok_fallback_send(
     bot,
@@ -161,7 +189,7 @@ async def tiktok_fallback_send(
     images = info.get("images") or []
     if images:
         CHUNK_SIZE = 10
-        chunks = [images[i : i + CHUNK_SIZE] for i in range(0, len(images), CHUNK_SIZE)]
+        chunks = [images[i:i + CHUNK_SIZE] for i in range(0, len(images), CHUNK_SIZE)]
 
         bot_name = (await bot.get_me()).first_name or "Bot"
         title = (info.get("title") or info.get("desc") or "TikTok Slideshow").strip()
@@ -173,7 +201,7 @@ async def tiktok_fallback_send(
 
         for idx, chunk in enumerate(chunks):
             if idx > 0:
-                await _safe_edit(f"🖼️ <b>Slideshow detected</b>\n\nSending album {idx+1}/{len(chunks)}...")
+                await _safe_edit(f"🖼️ <b>Slideshow detected</b>\n\nSending album {idx + 1}/{len(chunks)}...")
 
             media = []
             for i, img in enumerate(chunk):
@@ -197,6 +225,7 @@ async def tiktok_fallback_send(
     video_url = info.get("play") or info.get("wmplay") or info.get("hdplay")
     if video_url:
         title = info.get("title") or info.get("desc") or "TikTok Video"
+        desc = info.get("desc") or info.get("title") or "TikTok Video"
         safe_title = sanitize_filename(title)
         uid = uuid.uuid4().hex
         out_path = f"{TMP_DIR}/{uid}_{safe_title}.mp4"
@@ -232,7 +261,7 @@ async def tiktok_fallback_send(
         await bot.send_chat_action(chat_id=chat_id, action="upload_video")
 
         bot_name = (await bot.get_me()).first_name or "Bot"
-        caption = f"🎬 <b>{html.escape(title.strip() or 'TikTok Video')}</b>\n\n🪄 <i>Powered by {html.escape(bot_name)}</i>"
+        caption = _build_expandable_caption(title, desc, bot_name)
 
         await bot.send_video(
             chat_id=chat_id,

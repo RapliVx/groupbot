@@ -196,7 +196,7 @@ async def ytdlp_download(
     start_ts = __import__("time").time()
 
     if fmt_key == "mp3":
-        update_interval = 3
+        update_interval = 2
         cmd = [
             YT_DLP,
             "--cookies", COOKIES_PATH,
@@ -227,7 +227,7 @@ async def ytdlp_download(
             fmt = "bestvideo*+bestaudio/best"
 
         est_size = await asyncio.to_thread(_probe_total_size_sync, url, fmt)
-        update_interval = 7 if (est_size and est_size >= _SIZE_100MB) else 3
+        update_interval = 7 if (est_size and est_size >= _SIZE_100MB) else 2
 
         cmd = [
             YT_DLP,
@@ -256,7 +256,7 @@ async def ytdlp_download(
                     return picked
 
             print("[YTDLP] video failed → trying bestimage")
-            update_interval = 3
+            update_interval = 2
 
             cmd2 = [
                 YT_DLP,
