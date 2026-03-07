@@ -18,7 +18,27 @@ def _is_instagram(url: str) -> bool:
     except Exception:
         return "instagram.com" in (url or "").lower()
 
+def _strip_job_prefix(path: str, prefix: str) -> str:
+    try:
+        base = os.path.basename(path)
+        if not base.startswith(prefix + "_"):
+            return path
 
+        clean_name = base[len(prefix) + 1:]
+        new_path = os.path.join(os.path.dirname(path), clean_name)
+
+        if os.path.abspath(new_path) == os.path.abspath(path):
+            return path
+
+        if os.path.exists(new_path):
+            stem, ext = os.path.splitext(clean_name)
+            new_path = os.path.join(os.path.dirname(path), f"{stem}_{prefix}{ext}")
+
+        os.rename(path, new_path)
+        return new_path
+    except Exception:
+        return path
+        
 def _pick_latest_media_file(since_ts: float, prefix: str) -> str | None:
     exts = (".mp4", ".mp3", ".jpg", ".jpeg", ".png", ".webp")
     try:
@@ -281,4 +301,8 @@ async def ytdlp_download(
     )
 
     print("[YTDLP OUTPUT FILES]", files)
-    return files[0] if files else None
+    if not files:
+        return None
+    
+    final_path = _strip_job_prefix(files[0], job_id)
+    return final_path
