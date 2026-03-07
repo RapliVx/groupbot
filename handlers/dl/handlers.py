@@ -304,9 +304,10 @@ async def _dl_worker(app, chat_id, reply_to, raw_url, fmt_key, status_msg_id, fo
             pass
 
     finally:
-        if path and os.path.exists(path):
+        file_path = path.get("path") if isinstance(path, dict) else path
+        if file_path and os.path.exists(file_path):
             try:
-                os.remove(path)
+                os.remove(file_path)
             except Exception:
                 pass
 
