@@ -392,11 +392,14 @@ def asupan_keyboard(owner_id: int):
 async def fetch_asupan_tikwm(keyword: str | None = None):
     default_keywords = [
         "cacaaaja39",
+        "mellyn022",
+        "ecceuuu",
         "callistaaraww",
         "auliaaizumiii_",
         "inipavanaml24",
         "tante holic",
         "alaa.sabillaa",
+        "meyturuu_",
         "urvelsyn",
         "user94772038",
         "araasshr",
