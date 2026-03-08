@@ -98,12 +98,12 @@ def _image_to_static_sticker(image_bytes: bytes) -> str:
 async def _build_input_sticker_from_reply(reply, bot, emoji: str):
     if reply.sticker:
         sticker = reply.sticker
-    
+
         if getattr(sticker, "type", None) and str(sticker.type).lower().endswith("custom_emoji"):
             raise RuntimeError("Custom emoji sticker belum support buat /kang")
-    
+
         sticker_format = _sticker_format_from_obj(sticker)
-    
+
         if sticker_format in ("animated", "video"):
             return InputSticker(
                 sticker=sticker.file_id,
@@ -111,14 +111,14 @@ async def _build_input_sticker_from_reply(reply, bot, emoji: str):
                 format=sticker_format,
             ), sticker_format, None
 
-    sticker_bytes = await _download_file_bytes(bot, sticker.file_id)
-    temp_path = _image_to_static_sticker(sticker_bytes)
+        sticker_bytes = await _download_file_bytes(bot, sticker.file_id)
+        temp_path = _image_to_static_sticker(sticker_bytes)
 
-    return InputSticker(
-        sticker=open(temp_path, "rb"),
-        emoji_list=[emoji],
-        format="static",
-    ), "static", temp_path
+        return InputSticker(
+            sticker=open(temp_path, "rb"),
+            emoji_list=[emoji],
+            format="static",
+        ), "static", temp_path
 
     if reply.photo:
         photo = reply.photo[-1]
