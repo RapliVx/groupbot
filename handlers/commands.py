@@ -36,7 +36,7 @@ from handlers.moderation import moderation_cmd, ban_cmd, unban_cmd, mute_cmd, un
 from fun.quotly import q_cmd
 from fun.kang import kang_cmd
 
-from handlers.asupan import (
+from fun.asupan import (
     asupan_cmd,
     asupann_cmd,
     autodel_cmd,
