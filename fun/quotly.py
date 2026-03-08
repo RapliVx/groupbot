@@ -213,12 +213,6 @@ async def q_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         async with aiohttp.ClientSession() as session:
             total = len(valid_messages)
 
-            if count > 1 and total < count:
-                await wait.edit_text(
-                    f"Ketemu cuma {total}/{count} pesan dari rantai reply.\n"
-                    f"Bot API Telegram memang terbatas buat ambil history penuh."
-                )
-
             for idx, (item, text, entities) in enumerate(valid_messages, start=1):
                 sender = _get_sender_obj(item)
                 from_payload = _build_from_payload(sender)
@@ -243,8 +237,7 @@ async def q_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     ],
                 }
 
-                if not (count > 1 and total < count):
-                    await wait.edit_text(f"Sedang membuat sticker {idx}/{total}...")
+                await wait.edit_text(f"Sedang membuat sticker {idx}/{total}...")
 
                 image_bytes = await _generate_quote_sticker(session, context.bot.token, payload)
 
