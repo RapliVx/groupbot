@@ -1,4 +1,8 @@
+import os
 import re
+import io
+import tempfile
+from PIL import Image
 from telegram import Update, InputSticker
 from telegram.ext import ContextTypes
 
@@ -28,6 +32,115 @@ def _pick_emoji(args: list[str]) -> str:
     return "🤍"
 
 
+def _sticker_format_from_obj(sticker) -> str | None:
+    if not sticker:
+        return None
+    if getattr(sticker, "is_video", False):
+        return "video"
+    if getattr(sticker, "is_animated", False):
+        return "animated"
+    return "static"
+
+
+def _pack_names(user, bot_username: str, bot_first_name: str, sticker_format: str) -> tuple[str, str]:
+    pack_base = _pick_user_pack_base(user)
+
+    if sticker_format == "animated":
+        pack_name = f"{pack_base}_anim_by_{bot_username}"
+    elif sticker_format == "video":
+        pack_name = f"{pack_base}_vid_by_{bot_username}"
+    else:
+        pack_name = f"{pack_base}_by_{bot_username}"
+
+    pack_name = pack_name[:64]
+
+    pack_title_name = user.first_name or user.username or f"User {user.id}"
+    if sticker_format == "animated":
+        pack_title = f"{pack_title_name} animated by {bot_first_name}"
+    elif sticker_format == "video":
+        pack_title = f"{pack_title_name} video by {bot_first_name}"
+    else:
+        pack_title = f"{pack_title_name} by {bot_first_name}"
+
+    return pack_name, pack_title[:64]
+
+
+async def _download_file_bytes(bot, file_id: str) -> bytes:
+    tg_file = await bot.get_file(file_id)
+    data = await tg_file.download_as_bytearray()
+    return bytes(data)
+
+
+def _image_to_static_sticker(image_bytes: bytes) -> str:
+    img = Image.open(io.BytesIO(image_bytes)).convert("RGBA")
+
+    max_side = 512
+    w, h = img.size
+    if w == 0 or h == 0:
+        raise RuntimeError("Gambar tidak valid")
+
+    scale = min(max_side / w, max_side / h)
+    new_w = max(1, int(w * scale))
+    new_h = max(1, int(h * scale))
+
+    resized = img.resize((new_w, new_h), Image.LANCZOS)
+    canvas = Image.new("RGBA", (512, 512), (0, 0, 0, 0))
+    x = (512 - new_w) // 2
+    y = (512 - new_h) // 2
+    canvas.paste(resized, (x, y), resized)
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".webp")
+    tmp.close()
+    canvas.save(tmp.name, "WEBP", quality=100, method=6)
+    return tmp.name
+
+
+async def _build_input_sticker_from_reply(reply, bot, emoji: str):
+    if reply.sticker:
+        sticker = reply.sticker
+
+        if getattr(sticker, "type", None) and str(sticker.type).lower().endswith("custom_emoji"):
+            raise RuntimeError("Custom emoji sticker belum support buat /kang")
+
+        sticker_format = _sticker_format_from_obj(sticker)
+        return InputSticker(
+            sticker=sticker.file_id,
+            emoji_list=[emoji],
+            format=sticker_format,
+        ), sticker_format, None
+
+    if reply.photo:
+        photo = reply.photo[-1]
+        photo_bytes = await _download_file_bytes(bot, photo.file_id)
+        temp_path = _image_to_static_sticker(photo_bytes)
+        return InputSticker(
+            sticker=open(temp_path, "rb"),
+            emoji_list=[emoji],
+            format="static",
+        ), "static", temp_path
+
+    if reply.document:
+        mime = (getattr(reply.document, "mime_type", "") or "").lower()
+        file_name = (getattr(reply.document, "file_name", "") or "").lower()
+
+        is_image_doc = mime.startswith("image/") or file_name.endswith(
+            (".png", ".jpg", ".jpeg", ".webp")
+        )
+
+        if not is_image_doc:
+            raise RuntimeError("Dokumen harus berupa gambar")
+
+        doc_bytes = await _download_file_bytes(bot, reply.document.file_id)
+        temp_path = _image_to_static_sticker(doc_bytes)
+        return InputSticker(
+            sticker=open(temp_path, "rb"),
+            emoji_list=[emoji],
+            format="static",
+        ), "static", temp_path
+
+    raise RuntimeError("Reply ke sticker, foto, atau dokumen gambar")
+
+
 async def kang_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.effective_message
     user = update.effective_user
@@ -37,40 +150,27 @@ async def kang_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     reply = msg.reply_to_message
     if not reply:
-        return await msg.reply_text("Reply ke sticker yang mau dikang.")
-
-    sticker = reply.sticker
-    if not sticker:
-        return await msg.reply_text("Reply ke sticker")
-
-    if sticker.type and str(sticker.type).lower().endswith("custom_emoji"):
-        return await msg.reply_text("Test.")
+        return await msg.reply_text("Reply ke sticker, foto, atau dokumen gambar yang mau dikang.")
 
     wait = await msg.reply_text("Sedang nyolong sticker...")
+
+    temp_path = None
+    opened_file = None
 
     try:
         me = await context.bot.get_me()
         bot_username = (me.username or "bot").lower()
         bot_first_name = me.first_name or "Bot"
-
-        pack_base = _pick_user_pack_base(user)
-        pack_name = f"{pack_base}_by_{bot_username}"
-        pack_name = pack_name[:64]
-
-        if not pack_name.endswith(f"_by_{bot_username}"):
-            suffix = f"_by_{bot_username}"
-            room = 64 - len(suffix)
-            pack_name = f"{pack_base[:room]}{suffix}"
-
-        pack_title_name = user.first_name or user.username or f"User {user.id}"
-        pack_title = f"{pack_title_name} by {bot_first_name}"
         emoji = _pick_emoji(context.args or [])
 
-        input_sticker = InputSticker(
-            sticker=sticker.file_id,
-            emoji_list=[emoji],
-            format=sticker.format,
+        input_sticker, sticker_format, temp_path = await _build_input_sticker_from_reply(
+            reply, context.bot, emoji
         )
+
+        if hasattr(input_sticker.sticker, "read"):
+            opened_file = input_sticker.sticker
+
+        pack_name, pack_title = _pack_names(user, bot_username, bot_first_name, sticker_format)
 
         created = False
 
@@ -80,7 +180,7 @@ async def kang_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.create_new_sticker_set(
                 user_id=user.id,
                 name=pack_name,
-                title=pack_title[:64],
+                title=pack_title,
                 stickers=[input_sticker],
             )
             created = True
@@ -99,3 +199,16 @@ async def kang_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except Exception as e:
         await wait.edit_text(f"Gagal kang sticker: {e}")
+
+    finally:
+        try:
+            if opened_file:
+                opened_file.close()
+        except Exception:
+            pass
+
+        try:
+            if temp_path and os.path.exists(temp_path):
+                os.remove(temp_path)
+        except Exception:
+            pass
