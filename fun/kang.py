@@ -3,7 +3,7 @@ import re
 import io
 import tempfile
 from PIL import Image
-from telegram import Update, InputSticker
+from telegram import Update, InputSticker, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 
 
@@ -192,9 +192,14 @@ async def kang_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 sticker=input_sticker,
             )
 
+        pack_url = f"https://t.me/addstickers/{pack_name}"
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("Sticker Pack", url=pack_url)]
+        ])
+
         await wait.edit_text(
-            "Berhasil dikang\n\n"
-            f"Pack: https://t.me/addstickers/{pack_name}"
+            "Berhasil dikang",
+            reply_markup=keyboard
         )
 
     except Exception as e:
