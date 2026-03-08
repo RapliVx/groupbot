@@ -294,8 +294,6 @@ async def q_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     ],
                 }
 
-                await wait.edit_text(f"Sedang membuat sticker...")
-
                 image_bytes = await _generate_quote_sticker(session, context.bot.token, payload)
 
                 sticker = io.BytesIO(image_bytes)
