@@ -4,18 +4,28 @@ import tempfile
 import asyncio
 from typing import Optional
 
-from PIL import Image, ImageDraw, ImageFont, ImageOps, ImageFilter
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 from telegram import Update
 from telegram.ext import ContextTypes
 
 
 FONT_REGULAR_CANDIDATES = [
+    "/usr/share/fonts/truetype/roboto/unhinted/RobotoTTF/Roboto-Regular.ttf",
+    "/usr/share/fonts/truetype/roboto/Roboto-Regular.ttf",
+    "/usr/share/fonts/TTF/Roboto-Regular.ttf",
+    "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+    "/usr/share/fonts/opentype/noto/NotoSans-Regular.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
     "/usr/share/fonts/TTF/DejaVuSans.ttf",
     "/usr/share/fonts/dejavu/DejaVuSans.ttf",
 ]
 
 FONT_BOLD_CANDIDATES = [
+    "/usr/share/fonts/truetype/roboto/unhinted/RobotoTTF/Roboto-Bold.ttf",
+    "/usr/share/fonts/truetype/roboto/Roboto-Bold.ttf",
+    "/usr/share/fonts/TTF/Roboto-Bold.ttf",
+    "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf",
+    "/usr/share/fonts/opentype/noto/NotoSans-Bold.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
     "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
@@ -32,10 +42,10 @@ def _pick_font(paths: list[str], size: int):
     return ImageFont.load_default()
 
 
-def _measure_text(draw: ImageDraw.ImageDraw, text: str, font) -> tuple[int, int]:
+def _measure_multiline(draw: ImageDraw.ImageDraw, text: str, font, spacing: int = 6) -> tuple[int, int]:
     if not text:
         return 0, 0
-    box = draw.multiline_textbbox((0, 0), text, font=font, spacing=8)
+    box = draw.multiline_textbbox((0, 0), text, font=font, spacing=spacing)
     return box[2] - box[0], box[3] - box[1]
 
 
@@ -45,7 +55,7 @@ def _wrap_text(draw: ImageDraw.ImageDraw, text: str, font, max_width: int, max_l
         return ""
 
     paragraphs = raw.split("\n")
-    out_lines = []
+    out_lines: list[str] = []
 
     for para in paragraphs:
         words = para.split()
@@ -58,7 +68,7 @@ def _wrap_text(draw: ImageDraw.ImageDraw, text: str, font, max_width: int, max_l
 
         for word in words[1:]:
             trial = f"{current} {word}"
-            w, _ = _measure_text(draw, trial, font)
+            w = draw.textlength(trial, font=font)
             if w <= max_width:
                 current = trial
             else:
@@ -87,8 +97,8 @@ def _wrap_text(draw: ImageDraw.ImageDraw, text: str, font, max_width: int, max_l
             if candidate.endswith("..."):
                 break
             candidate = candidate[:-1].rstrip() + "..."
-            w, _ = _measure_text(draw, candidate, font)
-            if w <= max_width * max_lines:
+            w, _ = _measure_multiline(draw, candidate, font, spacing=6)
+            if w <= max_width:
                 wrapped = candidate
                 break
 
@@ -104,7 +114,7 @@ def _load_avatar(avatar_bytes: Optional[bytes], size: int) -> Optional[Image.Ima
             avatar,
             (size, size),
             method=Image.LANCZOS,
-            centering=(0.5, 0.35),
+            centering=(0.5, 0.38),
         )
         mask = Image.new("L", (size, size), 0)
         mask_draw = ImageDraw.Draw(mask)
@@ -118,15 +128,15 @@ def _load_avatar(avatar_bytes: Optional[bytes], size: int) -> Optional[Image.Ima
 def _make_fallback_avatar(name: str, size: int) -> Image.Image:
     avatar = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(avatar)
-    draw.ellipse((0, 0, size, size), fill=(83, 60, 137, 255))
+    draw.ellipse((0, 0, size, size), fill=(96, 72, 141, 255))
 
     initials = (name or "U").strip()[:1].upper()
-    font = _pick_font(FONT_BOLD_CANDIDATES, int(size * 0.45))
+    font = _pick_font(FONT_BOLD_CANDIDATES, int(size * 0.42))
     box = draw.textbbox((0, 0), initials, font=font)
     tw = box[2] - box[0]
     th = box[3] - box[1]
     draw.text(
-        ((size - tw) / 2, (size - th) / 2 - 4),
+        ((size - tw) / 2, (size - th) / 2 - 3),
         initials,
         font=font,
         fill=(255, 255, 255, 255),
@@ -134,42 +144,18 @@ def _make_fallback_avatar(name: str, size: int) -> Image.Image:
     return avatar
 
 
-def _rounded_gradient(size: tuple[int, int], radius: int) -> Image.Image:
-    w, h = size
-    base = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    px = base.load()
-
-    c1 = (58, 40, 92, 245)
-    c2 = (37, 29, 56, 245)
-
-    for y in range(h):
-        t = y / max(h - 1, 1)
-        r = int(c1[0] * (1 - t) + c2[0] * t)
-        g = int(c1[1] * (1 - t) + c2[1] * t)
-        b = int(c1[2] * (1 - t) + c2[2] * t)
-        a = int(c1[3] * (1 - t) + c2[3] * t)
-        for x in range(w):
-            px[x, y] = (r, g, b, a)
-
-    mask = Image.new("L", (w, h), 0)
-    mask_draw = ImageDraw.Draw(mask)
-    mask_draw.rounded_rectangle((0, 0, w, h), radius=radius, fill=255)
-    base.putalpha(mask)
-    return base
-
-
 def _render_quote_webp(author_name: str, text: str, avatar_bytes: Optional[bytes]) -> str:
     max_canvas_w = 512
     max_canvas_h = 512
 
-    avatar_size = 72
-    bubble_pad_x = 24
-    bubble_pad_y = 20
-    overlap = 22
-    max_text_width = 330
+    avatar_size = 62
+    bubble_pad_x = 22
+    bubble_pad_y = 18
+    overlap = 18
+    max_text_width = 310
 
-    font_name = _pick_font(FONT_BOLD_CANDIDATES, 28)
-    font_text = _pick_font(FONT_REGULAR_CANDIDATES, 30)
+    font_name = _pick_font(FONT_BOLD_CANDIDATES, 22)
+    font_text = _pick_font(FONT_REGULAR_CANDIDATES, 24)
 
     probe = ImageDraw.Draw(Image.new("RGBA", (1, 1), (0, 0, 0, 0)))
 
@@ -177,51 +163,47 @@ def _render_quote_webp(author_name: str, text: str, avatar_bytes: Optional[bytes
     if not wrapped_text:
         wrapped_text = "..."
 
-    name_w, name_h = _measure_text(probe, author_name, font_name)
-    text_w, text_h = _measure_text(probe, wrapped_text, font_text)
+    name_w, name_h = _measure_multiline(probe, author_name, font_name, spacing=4)
+    text_w, text_h = _measure_multiline(probe, wrapped_text, font_text, spacing=6)
 
     bubble_w = max(name_w, text_w) + bubble_pad_x * 2
-    bubble_h = bubble_pad_y * 2 + name_h + 10 + text_h
+    bubble_h = bubble_pad_y * 2 + name_h + 8 + text_h
 
-    bubble_w = min(bubble_w, max_canvas_w - 40 - avatar_size // 2)
-    bubble_h = min(bubble_h, max_canvas_h - 40)
+    bubble_w = min(bubble_w, max_canvas_w - 24 - (avatar_size // 2))
+    bubble_h = min(bubble_h, max_canvas_h - 24)
 
-    bubble_x = avatar_size - overlap + 8
-    bubble_y = 18
+    bubble_x = avatar_size - overlap + 10
+    bubble_y = 12
 
-    canvas_w = min(max_canvas_w, bubble_x + bubble_w + 20)
-    canvas_h = min(max_canvas_h, bubble_y + bubble_h + 20)
+    canvas_w = min(max_canvas_w, bubble_x + bubble_w + 12)
+    canvas_h = min(max_canvas_h, bubble_y + bubble_h + 12)
 
     canvas = Image.new("RGBA", (canvas_w, canvas_h), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(canvas)
 
-    shadow = Image.new("RGBA", (bubble_w + 20, bubble_h + 20), (0, 0, 0, 0))
-    shadow_draw = ImageDraw.Draw(shadow)
-    shadow_draw.rounded_rectangle((10, 10, bubble_w + 10, bubble_h + 10), radius=32, fill=(0, 0, 0, 110))
-    shadow = shadow.filter(ImageFilter.GaussianBlur(10))
-    canvas.alpha_composite(shadow, (bubble_x - 10, bubble_y - 2))
-
-    bubble = _rounded_gradient((bubble_w, bubble_h), 30)
-    canvas.alpha_composite(bubble, (bubble_x, bubble_y))
+    draw.rounded_rectangle(
+        (bubble_x, bubble_y, bubble_x + bubble_w, bubble_y + bubble_h),
+        radius=24,
+        fill=(63, 45, 92, 255),
+    )
 
     avatar = _load_avatar(avatar_bytes, avatar_size)
     if avatar is None:
         avatar = _make_fallback_avatar(author_name, avatar_size)
 
-    avatar_y = bubble_y + 10
-    avatar_x = 2
+    avatar_x = 4
+    avatar_y = bubble_y + 8
     canvas.alpha_composite(avatar, (avatar_x, avatar_y))
 
-    draw = ImageDraw.Draw(canvas)
-
     text_x = bubble_x + bubble_pad_x
-    name_y = bubble_y + bubble_pad_y - 2
-    body_y = name_y + name_h + 10
+    name_y = bubble_y + bubble_pad_y - 1
+    body_y = name_y + name_h + 8
 
     draw.text(
         (text_x, name_y),
         author_name,
         font=font_name,
-        fill=(205, 151, 255, 255),
+        fill=(198, 149, 255, 255),
     )
 
     draw.multiline_text(
@@ -229,7 +211,7 @@ def _render_quote_webp(author_name: str, text: str, avatar_bytes: Optional[bytes
         wrapped_text,
         font=font_text,
         fill=(255, 255, 255, 255),
-        spacing=8,
+        spacing=6,
     )
 
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".webp")
@@ -274,7 +256,7 @@ async def q_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     author_name = (
         (source_user.first_name or "").strip()
         or (source_user.full_name or "").strip()
-        or (source_user.username or "").strip()
+        or (f"@{source_user.username}" if source_user.username else "")
         or "User"
     )
 
