@@ -72,6 +72,8 @@ HELP_TEXT = {
         "• 🧭 <code>/reminder</code> — Schedule a reminder\n"
         "• 💝 <code>/waifu</code> — Get a waifu\n"
         "• 💸 <code>/kurs</code> — Currency conversion\n"
+        "• 🖼️ <code>/q</code> — Create quote sticker\n"
+        "• 🎴 <code>/kang</code> — Add sticker to your pack\n"
     ),
 
     "help:ai": (
