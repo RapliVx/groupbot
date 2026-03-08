@@ -74,40 +74,51 @@ async def _download_file_bytes(bot, file_id: str) -> bytes:
 def _image_to_static_sticker(image_bytes: bytes) -> str:
     img = Image.open(io.BytesIO(image_bytes)).convert("RGBA")
 
-    max_side = 512
     w, h = img.size
-    if w == 0 or h == 0:
+    if w <= 0 or h <= 0:
         raise RuntimeError("Gambar tidak valid")
 
-    scale = min(max_side / w, max_side / h)
-    new_w = max(1, int(w * scale))
-    new_h = max(1, int(h * scale))
+    scale = min(512 / w, 512 / h)
+    new_w = max(1, int(round(w * scale)))
+    new_h = max(1, int(round(h * scale)))
 
     resized = img.resize((new_w, new_h), Image.LANCZOS)
+
     canvas = Image.new("RGBA", (512, 512), (0, 0, 0, 0))
     x = (512 - new_w) // 2
     y = (512 - new_h) // 2
-    canvas.paste(resized, (x, y), resized)
+    canvas.alpha_composite(resized, (x, y))
 
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".webp")
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
     tmp.close()
-    canvas.save(tmp.name, "WEBP", quality=100, method=6)
+    canvas.save(tmp.name, "PNG", optimize=True)
     return tmp.name
 
 
 async def _build_input_sticker_from_reply(reply, bot, emoji: str):
     if reply.sticker:
         sticker = reply.sticker
-
+    
         if getattr(sticker, "type", None) and str(sticker.type).lower().endswith("custom_emoji"):
             raise RuntimeError("Custom emoji sticker belum support buat /kang")
-
+    
         sticker_format = _sticker_format_from_obj(sticker)
-        return InputSticker(
-            sticker=sticker.file_id,
-            emoji_list=[emoji],
-            format=sticker_format,
-        ), sticker_format, None
+    
+        if sticker_format in ("animated", "video"):
+            return InputSticker(
+                sticker=sticker.file_id,
+                emoji_list=[emoji],
+                format=sticker_format,
+            ), sticker_format, None
+
+    sticker_bytes = await _download_file_bytes(bot, sticker.file_id)
+    temp_path = _image_to_static_sticker(sticker_bytes)
+
+    return InputSticker(
+        sticker=open(temp_path, "rb"),
+        emoji_list=[emoji],
+        format="static",
+    ), "static", temp_path
 
     if reply.photo:
         photo = reply.photo[-1]
