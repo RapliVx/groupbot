@@ -7,6 +7,8 @@ import shutil
 import platform
 import io
 import logging
+import socket
+import subprocess
 
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -27,6 +29,11 @@ except Exception:
     ImageDraw = None
     ImageFont = None
 
+try:
+    from importlib.metadata import version as pkg_version
+except Exception:
+    pkg_version = None
+
 
 def humanize_bytes(n: int) -> str:
     try:
@@ -40,6 +47,23 @@ def humanize_bytes(n: int) -> str:
     return f"{f:.1f}B"
 
 
+def _humanize_freq(mhz):
+    try:
+        mhz = float(mhz)
+    except Exception:
+        return "N/A"
+    if mhz >= 1000:
+        return f"{mhz / 1000:.2f} GHz"
+    return f"{mhz:.0f} MHz"
+
+
+def _shorten(text, limit=64):
+    text = str(text or "").strip()
+    if len(text) <= limit:
+        return text
+    return text[: limit - 3].rstrip() + "..."
+
+
 def _get_os_name():
     try:
         if os.path.exists("/etc/os-release"):
@@ -49,6 +73,9 @@ def _get_os_name():
                     if "=" in line:
                         k, v = line.strip().split("=", 1)
                         os_info[k] = v.strip('"')
+            pretty = os_info.get("PRETTY_NAME")
+            if pretty:
+                return pretty
             return f"{os_info.get('NAME', 'Linux')} {os_info.get('VERSION', '')}".strip()
         return (platform.system() + " " + platform.release()).strip()
     except Exception:
@@ -111,14 +138,81 @@ def _safe_pct(x):
     return v
 
 
+def _get_pkg_version(*names):
+    if not pkg_version:
+        return "N/A"
+    for name in names:
+        try:
+            return pkg_version(name)
+        except Exception:
+            pass
+    return "N/A"
+
+
+def _run_version_cmd(cmd):
+    try:
+        proc = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=1.5
+        )
+        out = (proc.stdout or proc.stderr or "").strip()
+        if not out:
+            return "N/A"
+        return out.splitlines()[0].strip()
+    except Exception:
+        return "N/A"
+
+
+def _get_node_version():
+    out = _run_version_cmd(["node", "-v"])
+    return out if out else "N/A"
+
+
+def _get_deno_version():
+    out = _run_version_cmd(["deno", "--version"])
+    if out == "N/A":
+        return "N/A"
+    parts = out.split()
+    if len(parts) >= 2 and parts[0].lower() == "deno":
+        return parts[1]
+    return out
+
+
+def _get_ytdlp_version():
+    ver = _get_pkg_version("yt-dlp-ejs", "yt-dlp")
+    if ver != "N/A":
+        return ver
+    try:
+        from yt_dlp.version import __version__ as yt_dlp_version
+        return yt_dlp_version
+    except Exception:
+        return "N/A"
+
+
+def _get_runtime_versions():
+    return {
+        "ytdlp": _get_ytdlp_version(),
+        "node": _get_node_version(),
+        "deno": _get_deno_version(),
+        "ptb": _get_pkg_version("python-telegram-bot"),
+        "aiohttp": _get_pkg_version("aiohttp"),
+        "requests": _get_pkg_version("requests"),
+        "pillow": _get_pkg_version("Pillow"),
+        "psutil": _get_pkg_version("psutil"),
+        "aiofiles": _get_pkg_version("aiofiles"),
+    }
+
+
 @functools.lru_cache(maxsize=32)
 def _load_font(size: int, mono: bool = False):
     if not ImageFont:
         return None
     if mono:
         return get_font(["DejaVuSansMono.ttf", "LiberationMono-Regular.ttf", "FreeMono.ttf"], size)
-    else:
-        return get_font(["DejaVuSans.ttf", "LiberationSans-Regular.ttf"], size)
+    return get_font(["DejaVuSans.ttf", "LiberationSans-Regular.ttf"], size)
 
 
 def _gather_stats():
@@ -126,14 +220,14 @@ def _gather_stats():
 
     cpu_cores = os.cpu_count() or 0
     try:
-        cpu_load = psutil.cpu_percent(interval=None) if psutil else 0.0
+        cpu_load = psutil.cpu_percent(interval=0.15) if psutil else 0.0
     except Exception as e:
         logger.error(f"Failed to gather CPU load: {e}", exc_info=True)
         cpu_load = 0.0
 
     try:
         freq = psutil.cpu_freq() if psutil else None
-        cpu_freq = f"{freq.current:.0f} MHz" if freq else "N/A"
+        cpu_freq = _humanize_freq(freq.current) if freq else "N/A"
     except Exception as e:
         logger.error(f"Failed to gather CPU freq: {e}", exc_info=True)
         cpu_freq = "N/A"
@@ -159,7 +253,6 @@ def _gather_stats():
             ram_pct = (ram_used / ram_total * 100) if ram_total else 0.0
     except Exception as e:
         logger.error(f"Failed to gather RAM stats: {e}", exc_info=True)
-        pass
 
     swap_total = swap_used = 0
     swap_pct = 0.0
@@ -171,7 +264,6 @@ def _gather_stats():
             swap_pct = float(sw.percent)
     except Exception as e:
         logger.error(f"Failed to gather Swap stats: {e}", exc_info=True)
-        pass
 
     disk_total = disk_used = disk_free = 0
     disk_pct = 0.0
@@ -183,7 +275,6 @@ def _gather_stats():
         disk_pct = (disk_used / disk_total * 100) if disk_total else 0.0
     except Exception as e:
         logger.error(f"Failed to gather Disk stats: {e}", exc_info=True)
-        pass
 
     rx = tx = 0
     try:
@@ -193,12 +284,13 @@ def _gather_stats():
             tx = int(net.bytes_sent)
     except Exception as e:
         logger.error(f"Failed to gather Network stats: {e}", exc_info=True)
-        pass
 
     os_name = _get_os_name()
     kernel = platform.release() or "N/A"
     pyver = platform.python_version() or "N/A"
     uptime = get_pretty_uptime()
+    hostname = socket.gethostname() or platform.node() or "N/A"
+    runtime = _get_runtime_versions()
 
     return {
         "ts": now,
@@ -207,7 +299,14 @@ def _gather_stats():
         "swap": {"total": swap_total, "used": swap_used, "pct": float(swap_pct)},
         "disk": {"total": disk_total, "used": disk_used, "free": disk_free, "pct": float(disk_pct)},
         "net": {"rx": rx, "tx": tx},
-        "sys": {"os": os_name, "kernel": kernel, "python": pyver, "uptime": uptime},
+        "sys": {
+            "hostname": hostname,
+            "os": os_name,
+            "kernel": kernel,
+            "python": pyver,
+            "uptime": uptime,
+        },
+        "runtime": runtime,
     }
 
 
@@ -283,6 +382,7 @@ def _render_dashboard_sync(stats, net_speed=(0.0, 0.0)):
     f_mono = _load_font(int(18 * S), mono=True)
     f_small = _load_font(int(14 * S), mono=False)
     f_small_mono = _load_font(int(14 * S), mono=True)
+    f_tiny = _load_font(int(12 * S), mono=False)
 
     pad = int(28 * S)
     gap = int(18 * S)
@@ -335,17 +435,31 @@ def _render_dashboard_sync(stats, net_speed=(0.0, 0.0)):
         pass
 
     sx0, sy0, sx1, sy1 = sys_card
-    d.text((sx0 + int(18 * S), sy0 + int(16 * S)), "System", font=f_h, fill=text)
+    d.text((sx0 + int(18 * S), sy0 + int(16 * S)), "System + Runtime", font=f_h, fill=text)
 
     sysi = stats["sys"]
-    d.text((sx0 + int(18 * S), sy0 + int(56 * S)), f"OS     : {sysi['os']}", font=f_small, fill=muted)
-    d.text((sx0 + int(18 * S), sy0 + int(78 * S)), f"Kernel : {sysi['kernel']}", font=f_small, fill=muted)
-    d.text((sx0 + int(18 * S), sy0 + int(100 * S)), f"Python : {sysi['python']}", font=f_small, fill=muted)
-    d.text((sx0 + int(18 * S), sy0 + int(122 * S)), f"Uptime : {sysi['uptime']}", font=f_small, fill=muted)
+    runtime = stats["runtime"]
 
-    rx = stats["net"]["rx"]
-    tx = stats["net"]["tx"]
-    
+    sys_lines = [
+        f"Host    : {_shorten(sysi['hostname'], 56)}",
+        f"OS      : {_shorten(sysi['os'], 56)}",
+        f"Kernel  : {sysi['kernel']}",
+        f"Python  : {sysi['python']}",
+        f"Uptime  : {sysi['uptime']}",
+        f"Node    : {runtime['node']}",
+        f"Deno    : {runtime['deno']}",
+        f"yt-dlp  : {runtime['ytdlp']}",
+        f"PTB     : {runtime['ptb']}",
+        f"HTTP    : aiohttp {runtime['aiohttp']} • requests {runtime['requests']}",
+        f"Core    : Pillow {runtime['pillow']} • psutil {runtime['psutil']} • aiofiles {runtime['aiofiles']}",
+    ]
+
+    sys_y = sy0 + int(52 * S)
+    sys_step = int(16 * S)
+    for line in sys_lines:
+        d.text((sx0 + int(18 * S), sys_y), line, font=f_tiny, fill=muted)
+        sys_y += sys_step
+
     rx0, ry0, rx1, ry1 = res_card
     d.text((rx0 + int(18 * S), ry0 + int(16 * S)), "Memory + Disk", font=f_h, fill=text)
 
@@ -372,32 +486,35 @@ def _render_dashboard_sync(stats, net_speed=(0.0, 0.0)):
     d.text((rx0 + int(18 * S), ry0 + int(232 * S)), "Disk (/)", font=f, fill=text)
     d.text((rx0 + int(110 * S), ry0 + int(232 * S)), f"{humanize_bytes(disk['used'])} / {humanize_bytes(disk['total'])}", font=f_mono, fill=muted)
     _bar(d, rx0 + int(18 * S), ry0 + int(260 * S), (rx1 - rx0) - int(36 * S), int(22 * S), disk_pct, bar_bg, bar_fg, border, r=int(11 * S))
-    d.text((rx0 + int(18 * S), ry0 + int(288 * S)), f"{disk_pct:.1f}% free {humanize_bytes(disk['free'])}", font=f_small_mono, fill=muted)
+    d.text((rx0 + int(18 * S), ry0 + int(288 * S)), f"Used {disk_pct:.1f}% • Free {humanize_bytes(disk['free'])}", font=f_small_mono, fill=muted)
 
     nx0, ny0, nx1, ny1 = net_card
     d.text((nx0 + int(18 * S), ny0 + int(16 * S)), "Network", font=f_h, fill=text)
+
+    rx = stats["net"]["rx"]
+    tx = stats["net"]["tx"]
+
     d.text((nx0 + int(18 * S), ny0 + int(58 * S)), f"RX Total: {humanize_bytes(rx)}", font=f_mono, fill=muted)
     d.text((nx0 + int(18 * S), ny0 + int(82 * S)), f"TX Total: {humanize_bytes(tx)}", font=f_mono, fill=muted)
 
-    if psutil:
-        try:
-            rxps, txps = net_speed
+    try:
+        rxps, txps = net_speed
 
-            d.text((nx0 + int(18 * S), ny0 + int(120 * S)), "Speed", font=f, fill=text)
-            d.text((nx0 + int(18 * S), ny0 + int(144 * S)), f"RX/s: {humanize_bytes(int(rxps))}/s", font=f_mono, fill=muted)
-            d.text((nx0 + int(18 * S), ny0 + int(168 * S)), f"TX/s: {humanize_bytes(int(txps))}/s", font=f_mono, fill=muted)
+        d.text((nx0 + int(18 * S), ny0 + int(120 * S)), "Speed", font=f, fill=text)
+        d.text((nx0 + int(18 * S), ny0 + int(144 * S)), f"RX/s: {humanize_bytes(int(rxps))}/s", font=f_mono, fill=muted)
+        d.text((nx0 + int(18 * S), ny0 + int(168 * S)), f"TX/s: {humanize_bytes(int(txps))}/s", font=f_mono, fill=muted)
 
-            peak = max(rxps, txps, 1.0)
-            rxp = min(100.0, (rxps / peak) * 100.0)
-            txp = min(100.0, (txps / peak) * 100.0)
+        peak = max(rxps, txps, 1.0)
+        rxp = min(100.0, (rxps / peak) * 100.0)
+        txp = min(100.0, (txps / peak) * 100.0)
 
-            d.text((nx0 + int(18 * S), ny0 + int(206 * S)), "RX", font=f_small, fill=text)
-            _bar(d, nx0 + int(58 * S), ny0 + int(206 * S), (nx1 - nx0) - int(76 * S), int(16 * S), rxp, bar_bg, bar_fg, border, r=int(8 * S))
+        d.text((nx0 + int(18 * S), ny0 + int(206 * S)), "RX", font=f_small, fill=text)
+        _bar(d, nx0 + int(58 * S), ny0 + int(206 * S), (nx1 - nx0) - int(76 * S), int(16 * S), rxp, bar_bg, bar_fg, border, r=int(8 * S))
 
-            d.text((nx0 + int(18 * S), ny0 + int(234 * S)), "TX", font=f_small, fill=text)
-            _bar(d, nx0 + int(58 * S), ny0 + int(234 * S), (nx1 - nx0) - int(76 * S), int(16 * S), txp, bar_bg, bar_fg2, border, r=int(8 * S))
-        except Exception:
-            pass
+        d.text((nx0 + int(18 * S), ny0 + int(234 * S)), "TX", font=f_small, fill=text)
+        _bar(d, nx0 + int(58 * S), ny0 + int(234 * S), (nx1 - nx0) - int(76 * S), int(16 * S), txp, bar_bg, bar_fg2, border, r=int(8 * S))
+    except Exception:
+        pass
 
     bio = io.BytesIO()
     bio.name = "stats.png"
@@ -413,23 +530,36 @@ def _fallback_text(stats):
     disk = stats["disk"]
     net = stats["net"]
     sysi = stats["sys"]
+    runtime = stats["runtime"]
 
     lines = []
     lines.append("System Stats")
     lines.append("")
-    lines.append(f"CPU: {cpu['load']:.1f}%  | Cores: {cpu['cores']} | Freq: {cpu['freq']}")
+    lines.append(f"Host: {sysi['hostname']}")
+    lines.append(f"OS: {sysi['os']}")
+    lines.append(f"Kernel: {sysi['kernel']}")
+    lines.append(f"Python: {sysi['python']}")
+    lines.append(f"Uptime: {sysi['uptime']}")
+    lines.append("")
+    lines.append(f"CPU: {cpu['load']:.1f}% | Cores: {cpu['cores']} | Freq: {cpu['freq']}")
     lines.append(f"RAM: {humanize_bytes(ram['used'])}/{humanize_bytes(ram['total'])} ({ram['pct']:.1f}%)")
     if swap["total"]:
         lines.append(f"SWAP: {humanize_bytes(swap['used'])}/{humanize_bytes(swap['total'])} ({swap['pct']:.1f}%)")
     else:
         lines.append("SWAP: N/A")
-    lines.append(f"DISK(/): {humanize_bytes(disk['used'])}/{humanize_bytes(disk['total'])} ({disk['pct']:.1f}%)")
+    lines.append(f"DISK(/): {humanize_bytes(disk['used'])}/{humanize_bytes(disk['total'])} (used {disk['pct']:.1f}%)")
+    lines.append(f"DISK FREE: {humanize_bytes(disk['free'])}")
     lines.append(f"NET: RX {humanize_bytes(net['rx'])} | TX {humanize_bytes(net['tx'])}")
     lines.append("")
-    lines.append(f"OS: {sysi['os']}")
-    lines.append(f"Kernel: {sysi['kernel']}")
-    lines.append(f"Python: {sysi['python']}")
-    lines.append(f"Uptime: {sysi['uptime']}")
+    lines.append(f"yt-dlp: {runtime['ytdlp']}")
+    lines.append(f"Node: {runtime['node']}")
+    lines.append(f"Deno: {runtime['deno']}")
+    lines.append(f"PTB: {runtime['ptb']}")
+    lines.append(f"aiohttp: {runtime['aiohttp']}")
+    lines.append(f"requests: {runtime['requests']}")
+    lines.append(f"Pillow: {runtime['pillow']}")
+    lines.append(f"psutil: {runtime['psutil']}")
+    lines.append(f"aiofiles: {runtime['aiofiles']}")
     return "\n".join(lines)
 
 
@@ -439,9 +569,7 @@ async def stats_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     stats = await asyncio.to_thread(_gather_stats)
-
     net_speed = await _measure_net_speed()
-
     bio = await asyncio.to_thread(_render_dashboard_sync, stats, net_speed)
 
     if bio:
