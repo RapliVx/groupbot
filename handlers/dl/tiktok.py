@@ -15,43 +15,81 @@ def is_tiktok(url: str) -> bool:
     return any(x in (url or "") for x in ("tiktok.com", "vt.tiktok.com", "vm.tiktok.com"))
 
 
+def _truncate_text(text: str, limit: int) -> str:
+    text = (text or "").strip()
+    if limit <= 0:
+        return ""
+    if len(text) <= limit:
+        return text
+    if limit <= 3:
+        return "." * limit
+    return text[:limit - 3].rstrip() + "..."
+
+
 def _build_safe_caption(title: str, desc: str, bot_name: str, max_len: int = 1024) -> str:
-    clean_title = (title or "TikTok Video").strip()
+    clean_title = (title or "TikTok Video").strip() or "TikTok Video"
     clean_desc = (desc or "").strip()
-    safe_bot = html.escape(bot_name or "Bot")
+    clean_bot = (bot_name or "Bot").strip() or "Bot"
 
-    if not clean_desc or clean_desc == clean_title:
-        caption = (
-            f"<blockquote>🎬{html.escape(clean_title)}</blockquote>\n\n"
-            f"🪄 <i>Powered by {safe_bot}</i>"
-        )
-        if len(caption) <= max_len:
-            return caption
+    if clean_desc == clean_title:
+        clean_desc = ""
 
-        allowed = max_len - len("🎬 <b></b>\n\n") - len(f"\n\n🪄 <i>Powered by {safe_bot}</i>") - 3
-        if allowed < 1:
-            allowed = 1
+    footer_plain = f"🪄 Powered by {clean_bot}"
 
-        short_title = clean_title[:allowed].rstrip() + "..."
+    def plain_len(t: str, d: str) -> int:
+        if d:
+            return len(f"🎬 {t}\n\n{d}\n\n{footer_plain}")
+        return len(f"🎬 {t}\n\n{footer_plain}")
+
+    short_title = clean_title
+    short_desc = clean_desc
+
+    if short_desc:
+        allowed_desc = max_len - len(f"🎬 {short_title}\n\n\n\n{footer_plain}")
+        short_desc = _truncate_text(short_desc, allowed_desc)
+
+    if plain_len(short_title, short_desc) > max_len:
+        if short_desc:
+            allowed_title = max_len - len(f"🎬 \n\n{short_desc}\n\n{footer_plain}")
+        else:
+            allowed_title = max_len - len(f"🎬 \n\n{footer_plain}")
+        short_title = _truncate_text(short_title, allowed_title)
+
+    if short_desc and plain_len(short_title, short_desc) > max_len:
+        allowed_desc = max_len - len(f"🎬 {short_title}\n\n\n\n{footer_plain}")
+        short_desc = _truncate_text(short_desc, allowed_desc)
+
+    if not short_title:
+        short_title = "TikTok Video"
+
+    if short_desc:
         return (
-            f"<blockquote>🎬{html.escape(short_title)}</blockquote>\n\n"
-            f"🪄 <i>Powered by {safe_bot}</i>"
+            f"<blockquote>🎬 {html.escape(short_title)}</blockquote>\n\n"
+            f"{html.escape(short_desc)}\n\n"
+            f"🪄 <i>Powered by {html.escape(clean_bot)}</i>"
         )
 
-    prefix = f"🎬 <blockquote>🎬{html.escape(clean_title)}</blockquote>\n\n"
-    suffix = f"\n\n🪄 <i>Powered by {safe_bot}</i>"
-    body = html.escape(clean_desc)
+    return (
+        f"<blockquote>🎬 {html.escape(short_title)}</blockquote>\n\n"
+        f"🪄 <i>Powered by {html.escape(clean_bot)}</i>"
+    )
 
-    full = f"{prefix}{body}{suffix}"
-    if len(full) <= max_len:
-        return full
 
-    allowed = max_len - len(prefix) - len(suffix) - 3
-    if allowed < 1:
-        allowed = 1
+def _build_safe_album_caption(title: str, bot_name: str, max_len: int = 1024) -> str:
+    clean_title = (title or "TikTok Slideshow").strip() or "TikTok Slideshow"
+    clean_bot = (bot_name or "Bot").strip() or "Bot"
 
-    short_desc = clean_desc[:allowed].rstrip() + "..."
-    return f"{prefix}{html.escape(short_desc)}{suffix}"
+    footer_plain = f"🪄 Powered by {clean_bot}"
+    allowed_title = max_len - len(f"🖼️ \n\n{footer_plain}")
+
+    short_title = _truncate_text(clean_title, allowed_title)
+    if not short_title:
+        short_title = "TikTok Slideshow"
+
+    return (
+        f"<blockquote>🖼️ {html.escape(short_title)}</blockquote>\n\n"
+        f"🪄 <i>Powered by {html.escape(clean_bot)}</i>"
+    )
 
 
 async def douyin_download(url, bot, chat_id, status_msg_id):
@@ -230,9 +268,7 @@ async def tiktok_fallback_send(
 
         bot_name = (await bot.get_me()).first_name or "Bot"
         title = (info.get("title") or info.get("desc") or "TikTok Slideshow").strip()
-        title = html.escape(title)
-
-        caption_text = f"<blockquote>🖼️ {title}</blockquote>\n\n🪄 <i>Powered by {html.escape(bot_name)}</i>"
+        caption_text = _build_safe_album_caption(title, bot_name)
 
         await _set_uploading("album")
 
