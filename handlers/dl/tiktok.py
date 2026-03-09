@@ -22,7 +22,7 @@ def _build_safe_caption(title: str, desc: str, bot_name: str, max_len: int = 102
 
     if not clean_desc or clean_desc == clean_title:
         caption = (
-            f"🎬 <b>{html.escape(clean_title)}</b>\n\n"
+            f"<blockquote>🎬{html.escape(clean_title)}</blockquote>\n\n"
             f"🪄 <i>Powered by {safe_bot}</i>"
         )
         if len(caption) <= max_len:
@@ -34,11 +34,11 @@ def _build_safe_caption(title: str, desc: str, bot_name: str, max_len: int = 102
 
         short_title = clean_title[:allowed].rstrip() + "..."
         return (
-            f"🎬 <b>{html.escape(short_title)}</b>\n\n"
+            f"<blockquote>🎬{html.escape(short_title)}</blockquote>\n\n"
             f"🪄 <i>Powered by {safe_bot}</i>"
         )
 
-    prefix = f"🎬 <b>{html.escape(clean_title)}</b>\n\n"
+    prefix = f"🎬 <blockquote>🎬{html.escape(clean_title)}</blockquote>\n\n"
     suffix = f"\n\n🪄 <i>Powered by {safe_bot}</i>"
     body = html.escape(clean_desc)
 
