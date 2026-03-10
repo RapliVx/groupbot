@@ -1,6 +1,7 @@
 import os
 import uuid
 import html
+import aiofiles
 import subprocess
 from .constants import TMP_DIR, MAX_TG_SIZE
 from .utils import detect_media_type
