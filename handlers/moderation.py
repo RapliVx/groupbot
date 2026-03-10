@@ -412,15 +412,15 @@ async def moderation_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "<code>/moderation disable</code>\n"
         "<code>/moderation status</code>\n\n"
         "<b>Actions</b>\n"
-        "<code>/ban [7d] &lt;reply|user&gt; [reason]</code>\n"
-        "<code>/unban &lt;reply|user&gt;</code>\n"
-        "<code>/mute [10m] &lt;reply|user&gt; [reason]</code>\n"
-        "<code>/unmute &lt;reply|user&gt;</code>\n"
-        "<code>/kick &lt;reply|user&gt; [reason]</code>\n\n"
+        "<code>/ban @username/id 7d [reason]</code>\n"
+        "<code>/unban @username/id</code>\n"
+        "<code>/mute @username/id [reason]</code>\n"
+        "<code>/unmute @username/id </code>\n"
+        "<code>/kick @username/id [reason]</code>\n\n"
         "<b>Owner</b>\n"
-        "<code>/addsudo &lt;reply|user_id|@username&gt;</code>\n"
-        "<code>/rmsudo &lt;reply|user_id|@username&gt;</code>\n"
-        "<code>/sudolist</code>",
+        "<code>/addsudo @username/id</code>\n"
+        "<code>/rmsudo @username/id</code>\n"
+        "<code>/sudolist show all sudo</code>",
         parse_mode="HTML",
     )
 
@@ -677,7 +677,7 @@ async def kick_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not target_id:
         return await msg.reply_text(
             "Reply to a user or use:\n"
-            "<code>/kick user_id reason</code>\n"
+            "<code>/kick userid reason</code>\n"
             "<code>/kick @username reason</code>",
             parse_mode="HTML",
         )
@@ -718,7 +718,7 @@ async def addsudo_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if not _is_owner(update.effective_user.id):
-        return await msg.reply_text("Owner only.")
+        return
 
     has_reply = bool(msg.reply_to_message and msg.reply_to_message.from_user)
     target_token, _ = _extract_target_reason(context.args or [], has_reply)
@@ -753,7 +753,7 @@ async def rmsudo_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if not _is_owner(update.effective_user.id):
-        return await msg.reply_text("Owner only.")
+        return
 
     has_reply = bool(msg.reply_to_message and msg.reply_to_message.from_user)
     target_token, _ = _extract_target_reason(context.args or [], has_reply)
@@ -791,7 +791,7 @@ async def sudolist_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if not _is_owner(update.effective_user.id):
-        return await msg.reply_text("Owner only.")
+        return
 
     ids = sudo_list()
     if not ids:
@@ -799,9 +799,16 @@ async def sudolist_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     lines = ["<b>Sudo users:</b>"]
     for uid in ids:
-        lines.append(f"• <code>{uid}</code>")
+        obj = await _resolve_user_obj_for_display_by_id(update, context, int(uid))
+        name = _display_name(obj) or f"User {uid}"
+        who = _mention_html(int(uid), name)
+        lines.append(f"• {who} — <code>{uid}</code>")
 
-    return await msg.reply_text("\n".join(lines), parse_mode="HTML", disable_web_page_preview=True)
+    return await msg.reply_text(
+        "\n".join(lines),
+        parse_mode="HTML",
+        disable_web_page_preview=True,
+    )
 
 
 try:
