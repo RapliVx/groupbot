@@ -99,21 +99,24 @@ async def send_downloaded_media(
     meta = path if isinstance(path, dict) else {"path": path, "title": None}
     file_path = meta.get("path")
     original_title = (meta.get("title") or "").strip()
-    
-    if not info or not info.get("entries"):
-        raise Exception("No matching songs or videos were found.")
-    entries = info["entries"][:5]
-    
-    for i, entry in enumerate(entries, 1):
-            title = entry.get("title") or "Untitled"
-            video_id = entry.get("id")
-            uploader = entry.get("uploader") or "Unknown"
-            duration = entry.get("duration") or 0
-            
+    performer = (
+        meta.get("performer")
+        or meta.get("uploader")
+        or meta.get("artist")
+        or meta.get("channel")
+        or "Unknown"
+    )
+    duration = meta.get("duration")
+    thumbnail_path = (
+        meta.get("thumbnail_path")
+        or meta.get("thumb_path")
+        or meta.get("cover_path")
+    )
+
     if not file_path or not os.path.exists(file_path):
         raise RuntimeError("Download gagal")
 
-    if os.path.exists(file_path) and os.path.getsize(file_path) > MAX_TG_SIZE:
+    if os.path.getsize(file_path) > MAX_TG_SIZE:
         raise RuntimeError("File exceeds 2GB. Please choose a lower resolution.")
 
     await bot.edit_message_text(
@@ -122,29 +125,57 @@ async def send_downloaded_media(
         text="<b>Uploading...</b>",
         parse_mode="HTML",
     )
-    
-    async with aiofiles.open(file_path, "rb") as f:
-            audio_data = await f.read()
-            
+
     bot_name = (await bot.get_me()).first_name or "Bot"
     caption_text = original_title or _clean_caption_from_path(file_path)
     media_type = detect_media_type(file_path)
 
+    if duration is not None:
+        try:
+            duration = int(duration)
+        except Exception:
+            duration = None
+
     if fmt_key == "mp3":
         fixed_audio = reencode_mp3(file_path)
-        await bot.send_audio(
-            chat_id=chat_id,
-            audio=audio_data,
-            title=caption_text[:64],
-            performer=entry.get("uploader", "Unknown"),
-            duration=entry.get("duration"),
-            filename=f"{caption_text[:50]}.mp3",
-            reply_to_message_id=reply_to,
-            disable_notification=True,
-        )
-        os.remove(fixed_audio)
+        thumb_file = None
+
+        try:
+            if thumbnail_path and os.path.exists(thumbnail_path):
+                thumb_file = open(thumbnail_path, "rb")
+
+            with open(fixed_audio, "rb") as audio_file:
+                send_kwargs = {
+                    "chat_id": chat_id,
+                    "audio": audio_file,
+                    "title": caption_text[:64],
+                    "performer": str(performer)[:64],
+                    "filename": f"{caption_text[:50]}.mp3",
+                    "reply_to_message_id": reply_to,
+                    "disable_notification": True,
+                }
+
+                if duration:
+                    send_kwargs["duration"] = duration
+
+                if thumb_file:
+                    send_kwargs["thumbnail"] = thumb_file
+
+                await bot.send_audio(**send_kwargs)
+        finally:
+            if thumb_file:
+                try:
+                    thumb_file.close()
+                except Exception:
+                    pass
+
+            try:
+                os.remove(fixed_audio)
+            except Exception:
+                pass
+
         return
-        
+
     if media_type == "photo":
         await bot.send_photo(
             chat_id=chat_id,
