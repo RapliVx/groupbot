@@ -11,6 +11,7 @@ from utils.config import OWNER_ID
 
 MODERATION_DB = "data/moderation.sqlite3"
 BROADCAST_DB = "data/broadcast.sqlite3"
+SUDO_DB = "data/sudouser.sqlite3"
 
 
 def _db_init():
@@ -33,9 +34,33 @@ def _db_init():
         con.close()
 
 
+def _sudo_db_init():
+    os.makedirs("data", exist_ok=True)
+    con = sqlite3.connect(SUDO_DB)
+    try:
+        con.execute("PRAGMA journal_mode=WAL;")
+        con.execute("PRAGMA synchronous=NORMAL;")
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS sudo_users (
+                user_id INTEGER PRIMARY KEY,
+                added_at REAL NOT NULL
+            )
+            """
+        )
+        con.commit()
+    finally:
+        con.close()
+
+
 def _db():
     _db_init()
     return sqlite3.connect(MODERATION_DB)
+
+
+def _sudo_db():
+    _sudo_db_init()
+    return sqlite3.connect(SUDO_DB)
 
 
 def moderation_is_enabled(chat_id: int) -> bool:
@@ -76,6 +101,70 @@ def moderation_set(chat_id: int, enabled: bool):
         con.close()
 
 
+def sudo_is(user_id: int) -> bool:
+    con = _sudo_db()
+    try:
+        row = con.execute(
+            "SELECT 1 FROM sudo_users WHERE user_id=? LIMIT 1",
+            (int(user_id),),
+        ).fetchone()
+        return bool(row)
+    finally:
+        con.close()
+
+
+def sudo_add(user_id: int):
+    con = _sudo_db()
+    try:
+        now = float(time.time())
+        con.execute("BEGIN")
+        con.execute(
+            """
+            INSERT INTO sudo_users (user_id, added_at)
+            VALUES (?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+              added_at=excluded.added_at
+            """,
+            (int(user_id), now),
+        )
+        con.execute("COMMIT")
+    except Exception:
+        try:
+            con.execute("ROLLBACK")
+        except Exception:
+            pass
+        raise
+    finally:
+        con.close()
+
+
+def sudo_remove(user_id: int):
+    con = _sudo_db()
+    try:
+        con.execute("BEGIN")
+        con.execute("DELETE FROM sudo_users WHERE user_id=?", (int(user_id),))
+        con.execute("COMMIT")
+    except Exception:
+        try:
+            con.execute("ROLLBACK")
+        except Exception:
+            pass
+        raise
+    finally:
+        con.close()
+
+
+def sudo_list() -> list[int]:
+    con = _sudo_db()
+    try:
+        rows = con.execute(
+            "SELECT user_id FROM sudo_users ORDER BY added_at ASC"
+        ).fetchall()
+        return [int(x[0]) for x in rows if x and x[0] is not None]
+    finally:
+        con.close()
+
+
 def _lookup_user_id(username: str) -> int | None:
     u = (username or "").strip().lstrip("@").lower()
     if not u:
@@ -94,13 +183,17 @@ def _lookup_user_id(username: str) -> int | None:
         con.close()
 
 
+def _is_owner(user_id: int | None) -> bool:
+    return bool(user_id and user_id in OWNER_ID)
+
+
 async def _is_admin_or_owner(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     user = update.effective_user
     chat = update.effective_chat
     if not user or not chat:
         return False
 
-    if user.id in OWNER_ID:
+    if _is_owner(user.id) or sudo_is(user.id):
         return True
 
     if chat.type not in ("group", "supergroup"):
@@ -218,6 +311,15 @@ def _extract_duration_target_reason(args: list[str], has_reply_target: bool) -> 
     return None, None, target, reason
 
 
+def _extract_target_reason(args: list[str], has_reply_target: bool) -> tuple[str | None, str]:
+    a = [x for x in (args or []) if (x or "").strip()]
+    if has_reply_target:
+        return None, (" ".join(a).strip() or "-")
+    if not a:
+        return None, "-"
+    return a[0], (" ".join(a[1:]).strip() or "-")
+
+
 async def _resolve_target_user_id(update: Update, context: ContextTypes.DEFAULT_TYPE, token: str | None) -> int | None:
     msg = update.message
     if msg and msg.reply_to_message and msg.reply_to_message.from_user:
@@ -313,7 +415,12 @@ async def moderation_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "<code>/ban [7d] &lt;reply|user&gt; [reason]</code>\n"
         "<code>/unban &lt;reply|user&gt;</code>\n"
         "<code>/mute [10m] &lt;reply|user&gt; [reason]</code>\n"
-        "<code>/unmute &lt;reply|user&gt;</code>",
+        "<code>/unmute &lt;reply|user&gt;</code>\n"
+        "<code>/kick &lt;reply|user&gt; [reason]</code>\n\n"
+        "<b>Owner</b>\n"
+        "<code>/addsudo &lt;reply|user_id|@username&gt;</code>\n"
+        "<code>/rmsudo &lt;reply|user_id|@username&gt;</code>\n"
+        "<code>/sudolist</code>",
         parse_mode="HTML",
     )
 
@@ -548,7 +655,157 @@ async def unmute_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await msg.reply_text(f"Failed: <code>{html.escape(str(e))}</code>", parse_mode="HTML")
 
 
+async def kick_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = update.message
+    chat = update.effective_chat
+    if not msg or not chat:
+        return
+
+    if chat.type not in ("group", "supergroup"):
+        return
+
+    if not moderation_is_enabled(chat.id):
+        return
+
+    if not await _is_admin_or_owner(update, context):
+        return await msg.reply_text("You are not an admin.")
+
+    has_reply = bool(msg.reply_to_message and msg.reply_to_message.from_user)
+    target_token, reason = _extract_target_reason(context.args or [], has_reply)
+
+    target_id = await _resolve_target_user_id(update, context, target_token)
+    if not target_id:
+        return await msg.reply_text(
+            "Reply to a user or use:\n"
+            "<code>/kick user_id reason</code>\n"
+            "<code>/kick @username reason</code>",
+            parse_mode="HTML",
+        )
+
+    obj = await _resolve_target_user_obj_for_display(update, context, target_token)
+    if not obj and target_id:
+        obj = await _resolve_user_obj_for_display_by_id(update, context, int(target_id))
+
+    name = _display_name(obj) or _display_name_from_token(target_token)
+    who = _mention_html(int(target_id), name)
+
+    try:
+        until = datetime.now(timezone.utc) + timedelta(seconds=45)
+        await context.bot.ban_chat_member(
+            chat_id=chat.id,
+            user_id=int(target_id),
+            until_date=until,
+        )
+        await context.bot.unban_chat_member(
+            chat_id=chat.id,
+            user_id=int(target_id),
+            only_if_banned=True,
+        )
+        return await msg.reply_text(
+            "<b>Kicked</b>\n"
+            f"<b>User:</b> {who}\n"
+            f"<b>Reason:</b> <code>{html.escape(reason)}</code>",
+            parse_mode="HTML",
+            disable_web_page_preview=True,
+        )
+    except Exception as e:
+        return await msg.reply_text(f"Failed: <code>{html.escape(str(e))}</code>", parse_mode="HTML")
+
+
+async def addsudo_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = update.message
+    if not msg or not update.effective_user:
+        return
+
+    if not _is_owner(update.effective_user.id):
+        return await msg.reply_text("Owner only.")
+
+    has_reply = bool(msg.reply_to_message and msg.reply_to_message.from_user)
+    target_token, _ = _extract_target_reason(context.args or [], has_reply)
+
+    target_id = await _resolve_target_user_id(update, context, target_token)
+    if not target_id:
+        return await msg.reply_text(
+            "Reply to a user or use: <code>/addsudo user_id</code> / <code>/addsudo @username</code>",
+            parse_mode="HTML",
+        )
+
+    sudo_add(int(target_id))
+
+    obj = await _resolve_target_user_obj_for_display(update, context, target_token)
+    if not obj and target_id:
+        obj = await _resolve_user_obj_for_display_by_id(update, context, int(target_id))
+
+    name = _display_name(obj) or _display_name_from_token(target_token)
+    who = _mention_html(int(target_id), name)
+
+    return await msg.reply_text(
+        "<b>Added sudo</b>\n"
+        f"<b>User:</b> {who}",
+        parse_mode="HTML",
+        disable_web_page_preview=True,
+    )
+
+
+async def rmsudo_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = update.message
+    if not msg or not update.effective_user:
+        return
+
+    if not _is_owner(update.effective_user.id):
+        return await msg.reply_text("Owner only.")
+
+    has_reply = bool(msg.reply_to_message and msg.reply_to_message.from_user)
+    target_token, _ = _extract_target_reason(context.args or [], has_reply)
+
+    target_id = await _resolve_target_user_id(update, context, target_token)
+    if not target_id:
+        return await msg.reply_text(
+            "Reply to a user or use: <code>/rmsudo user_id</code> / <code>/rmsudo @username</code>",
+            parse_mode="HTML",
+        )
+
+    if int(target_id) in OWNER_ID:
+        return await msg.reply_text("Cannot remove owner from sudo/owner privileges.")
+
+    sudo_remove(int(target_id))
+
+    obj = await _resolve_target_user_obj_for_display(update, context, target_token)
+    if not obj and target_id:
+        obj = await _resolve_user_obj_for_display_by_id(update, context, int(target_id))
+
+    name = _display_name(obj) or _display_name_from_token(target_token)
+    who = _mention_html(int(target_id), name)
+
+    return await msg.reply_text(
+        "<b>Removed sudo</b>\n"
+        f"<b>User:</b> {who}",
+        parse_mode="HTML",
+        disable_web_page_preview=True,
+    )
+
+
+async def sudolist_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = update.message
+    if not msg or not update.effective_user:
+        return
+
+    if not _is_owner(update.effective_user.id):
+        return await msg.reply_text("Owner only.")
+
+    ids = sudo_list()
+    if not ids:
+        return await msg.reply_text("<b>Sudo users:</b>\n<code>(empty)</code>", parse_mode="HTML")
+
+    lines = ["<b>Sudo users:</b>"]
+    for uid in ids:
+        lines.append(f"• <code>{uid}</code>")
+
+    return await msg.reply_text("\n".join(lines), parse_mode="HTML", disable_web_page_preview=True)
+
+
 try:
     _db_init()
+    _sudo_db_init()
 except Exception:
     pass

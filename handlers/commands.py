@@ -32,10 +32,21 @@ from handlers.kurs import kurs_cmd
 from handlers.net import net_cmd
 from handlers.cookies import cookies_cmd
 from handlers.donate import donate_cmd
-from handlers.moderation import moderation_cmd, ban_cmd, unban_cmd, mute_cmd, unmute_cmd
 from fun.quotly import q_cmd
 from fun.kang import kang_cmd
 
+from handlers.moderation import (
+    moderation_cmd, 
+    ban_cmd, 
+    unban_cmd, 
+    mute_cmd, 
+    unmute_cmd,
+    kick_cmd,
+    addsudo_cmd,
+    rmsudo_cmd,
+    sudolist_cmd,
+)
+    
 from fun.asupan import (
     asupan_cmd,
     asupann_cmd,
