@@ -11,7 +11,7 @@ from telegram import Update, InputMediaPhoto, InputMediaVideo
 from telegram.ext import ContextTypes
 
 from utils.http import get_http_session
-from .constants import TMP_DIR
+from handlers.dl.constants import TMP_DIR
 
 
 IG_URL_RE = re.compile(r"https?://(?:www\.)?(?:dd)?instagram\.com/[^\s]+", re.I)
