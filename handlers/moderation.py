@@ -414,7 +414,7 @@ async def moderation_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "<b>Actions</b>\n"
         "<code>/ban @username/id 7d [reason]</code>\n"
         "<code>/unban @username/id</code>\n"
-        "<code>/mute @username/id [reason]</code>\n"
+        "<code>/mute @username/id 7d [reason]</code>\n"
         "<code>/unmute @username/id </code>\n"
         "<code>/kick @username/id [reason]</code>\n\n"
         "<b>Owner</b>\n"
