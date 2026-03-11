@@ -2,6 +2,7 @@ import os
 import uuid
 import asyncio
 import shutil
+import json
 import subprocess
 from urllib.parse import urlparse
 
@@ -135,6 +136,7 @@ def _pick_latest_media_file_recursive(root_dir: str) -> str | None:
     except Exception:
         return None
 
+# Assuming _pick_latest_media_file_recursive and _human_title_from_path are defined elsewhere
 
 async def _gallerydl_fallback_download(
     url: str,
@@ -167,6 +169,15 @@ async def _gallerydl_fallback_download(
         if COOKIES_PATH and os.path.exists(COOKIES_PATH):
             cmd += ["--cookies", COOKIES_PATH]
 
+        # Tambah custom filename biar include username dan truncated caption di nama file
+        # Asumsi untuk Instagram; sesuaikan kalau situs lain
+        cmd += [
+            "-o", "extractor.instagram.filename={username}_{caption[0:50]}.{extension}",
+        ]
+
+        # Tambah --dump-json biar dapet full metadata (termasuk caption full) di stdout
+        cmd += ["--dump-json"]
+
         cmd += [url]
 
         print("\n[GALLERY-DL CMD]")
@@ -194,6 +205,24 @@ async def _gallerydl_fallback_download(
         if proc.returncode != 0:
             return None
 
+        # Parse JSON dari stdout buat ambil caption full sebagai title
+        title = None
+        try:
+            output = stdout.decode(errors="ignore")
+            # Gallery-dl --dump-json output JSON lines; ambil yang terakhir (utama)
+            json_lines = [line.strip() for line in output.splitlines() if line.strip().startswith('{') and line.strip().endswith('}')]
+            if json_lines:
+                metadata = json.loads(json_lines[-1])  # Ambil JSON terakhir
+                # Untuk Instagram, key 'description' atau 'caption'; fallback ke yang ada
+                title = metadata.get('description') or metadata.get('caption') or metadata.get('title')
+                if title:
+                    # Sanitize title biar aman (hapus line breaks, dll.)
+                    title = title.replace('\n', ' ').strip()
+                    if len(title) > 200:  # Truncate kalau terlalu panjang buat caption TG
+                        title = title[:200] + '...'
+        except Exception as e:
+            print("[JSON PARSE ERROR]", e)
+
         picked = _pick_latest_media_file_recursive(job_dir)
         if not picked or not os.path.exists(picked):
             return None
@@ -207,7 +236,9 @@ async def _gallerydl_fallback_download(
                 final_path = os.path.join(TMP_DIR, f"{stem}_{uuid.uuid4().hex[:6]}{ext}")
             shutil.move(picked, final_path)
 
-        title = _human_title_from_path(final_path, job_id, url)
+        # Kalau title dari JSON gagal, fallback ke _human_title_from_path
+        if not title:
+            title = _human_title_from_path(final_path, job_id, url)
 
         return {
             "path": final_path,
