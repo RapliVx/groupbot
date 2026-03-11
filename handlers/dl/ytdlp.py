@@ -367,27 +367,6 @@ async def ytdlp_download(
         code = await run(cmd)
 
         if code != 0:
-            if is_ig:
-                picked = _pick_latest_media_file(start_ts, job_id)
-                if picked:
-                    return {
-                        "path": picked,
-                        "title": _extract_title_from_path(picked, job_id),
-                    }
-
-            print("[YTDLP] video failed → trying gallery-dl fallback")
-
-                fallback = await _gallerydl_fallback_download(
-                    url=url,
-                    job_id=job_id,
-                    bot=bot,
-                    chat_id=chat_id,
-                    status_msg_id=status_msg_id,
-                )
-                
-                if fallback:
-                    return fallback
-                
                 if is_ig:
                     picked = _pick_latest_media_file(start_ts, job_id)
                     if picked:
@@ -395,7 +374,28 @@ async def ytdlp_download(
                             "path": picked,
                             "title": _extract_title_from_path(picked, job_id),
                         }
-                
+            
+                print("[YTDLP] video failed → trying gallery-dl fallback")
+            
+                fallback = await _gallerydl_fallback_download(
+                    url=url,
+                    job_id=job_id,
+                    bot=bot,
+                    chat_id=chat_id,
+                    status_msg_id=status_msg_id,
+                )
+            
+                if fallback:
+                    return fallback
+            
+                if is_ig:
+                    picked = _pick_latest_media_file(start_ts, job_id)
+                    if picked:
+                        return {
+                            "path": picked,
+                            "title": _extract_title_from_path(picked, job_id),
+                        }
+            
                 return None
 
     def media_priority(p):
