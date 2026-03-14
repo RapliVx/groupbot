@@ -1,3 +1,5 @@
+from typing import List
+
 #split
 def split_message(text: str, max_length: int = 4000) -> List[str]:
     """
