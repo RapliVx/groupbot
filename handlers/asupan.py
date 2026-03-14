@@ -19,7 +19,7 @@ from telegram import Update
 
 from utils.http import get_http_session
 from utils.config import OWNER_ID, LOG_CHAT_ID
-from data.db import db_session
+from database.db import db_session
 
 log = logging.getLogger(__name__)
 
