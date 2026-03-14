@@ -2,7 +2,7 @@ import os
 import time
 import sqlite3
 from utils.config import OWNER_ID
-from utils.premium import premium_load_set, is_premium
+from utils.premium import is_premium
 from .constants import AUTO_DL_DB
 
 def _auto_dl_db_init():
@@ -85,14 +85,8 @@ def is_premium_required(url: str, premium_domains: set[str]) -> bool:
             return True
     return False
 
-_PREMIUM_USERS: set[int] = set()
-
-def init_premium_cache():
-    global _PREMIUM_USERS
-    _PREMIUM_USERS = premium_load_set()
-
 def is_premium_user(user_id: int) -> bool:
     uid = int(user_id)
     if uid in OWNER_ID:
         return True
-    return uid in _PREMIUM_USERS
+    return is_premium(uid)
