@@ -33,9 +33,9 @@ from fun.quotly import q_cmd
 from fun.kang import kang_cmd
 
 from handlers.caca import (
-    meta_query
-    cacaa_cmd
-    mode_cmd
+    meta_query,
+    cacaa_cmd,
+    mode_cmd,
 )
 
 from handlers.moderation import (
