@@ -1,7 +1,7 @@
 import time
 from database.db import db_session
-from .constants import ASUPAN_DB_PATH
-from . import state
+from fun.asupan.constants import ASUPAN_DB_PATH
+from fun.asupan import state
 
 
 def _asupan_db_init():
