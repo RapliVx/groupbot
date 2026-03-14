@@ -11,7 +11,7 @@ from fun.asupan import (
 from handlers.welcome import load_welcome_chats, init_welcome_db, load_verified
 from handlers.nsfw import nsfw_db_init
 
-from utils import premium_service
+from database import premium_service
 from handlers import caca
 
 log = logging.getLogger(__name__)
