@@ -20,9 +20,6 @@ from fun.reminder import reminder_cmd
 from handlers.gemini import ai_cmd
 from handlers.groq import groq_query
 from fun.quiz import quiz_cmd
-from handlers.caca import meta_query
-from handlers.caca_group import cacaa_cmd
-from handlers.caca_mode import mode_cmd
 from handlers.premium import premium_cmd
 from fun.waifu import waifu_cmd
 from handlers.update import update_cmd
@@ -34,6 +31,12 @@ from handlers.cookies import cookies_cmd
 from handlers.donate import donate_cmd
 from fun.quotly import q_cmd
 from fun.kang import kang_cmd
+
+from handlers.caca import (
+    meta_query
+    cacaa_cmd
+    mode_cmd
+)
 
 from handlers.moderation import (
     moderation_cmd, 
