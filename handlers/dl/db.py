@@ -2,7 +2,7 @@ import os
 import time
 import sqlite3
 from utils.config import OWNER_ID
-from utils.premium import is_premium
+from database.premium import is_premium
 from .constants import AUTO_DL_DB
 
 def _auto_dl_db_init():
