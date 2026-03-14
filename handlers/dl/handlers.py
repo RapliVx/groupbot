@@ -17,7 +17,7 @@ from .constants import (
     AUTO_DOWNLOAD_DOMAINS,
 )
 from .state import DL_CACHE
-from .db import load_auto_dl, save_auto_dl, is_premium_user, is_premium_required
+from database.download_db import load_auto_dl, save_auto_dl, is_premium_user, is_premium_required
 from .utils import normalize_url, is_invalid_video
 from .keyboards import dl_keyboard, res_keyboard, autodl_detect_keyboard
 from .probe import get_resolutions
