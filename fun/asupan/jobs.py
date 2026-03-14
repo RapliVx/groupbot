@@ -1,7 +1,7 @@
 from telegram.ext import ContextTypes
 from .constants import ASUPAN_AUTO_DELETE_SEC, log
 from . import state
-from .db import is_autodel_enabled
+from database.asupan_db import is_autodel_enabled
 
 
 async def _expire_asupan_notice(context: ContextTypes.DEFAULT_TYPE):

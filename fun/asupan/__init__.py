@@ -6,7 +6,7 @@ from .commands import (
     send_asupan_once,
 )
 
-from .db import (
+from database.asupan_db import (
     init_asupan_storage,
     load_asupan_groups,
     load_autodel_groups,

@@ -5,7 +5,7 @@ from telegram.ext import ContextTypes
 from utils.config import OWNER_ID, LOG_CHAT_ID
 from . import state
 from .auth import is_admin_or_owner
-from .db import (
+from database.asupan_db import (
     save_asupan_groups,
     save_autodel_groups,
     is_asupan_enabled,
