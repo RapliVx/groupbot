@@ -8,7 +8,7 @@ from telegram.ext import ContextTypes
 from .constants import MAX_TG_SIZE
 from handlers.join import require_join_or_block
 from utils.config import OWNER_ID
-from utils.premium import init_premium_db
+from database.premium import init_premium_db
 
 from .constants import (
     TMP_DIR,

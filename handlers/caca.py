@@ -17,7 +17,7 @@ from utils.ai_utils import split_message, sanitize_ai_output, PERSONAS
 from utils.config import GROQ_BASE, GROQ_KEY, GROQ_MODEL2, GROQ_TIMEOUT
 from utils.http import get_http_session
 
-from utils import caca_db
+from database import caca_db
 from utils import caca_memory
 
 

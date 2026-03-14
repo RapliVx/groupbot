@@ -1,4 +1,4 @@
-from utils.premium import (
+from database.premium import (
     init_premium_db,
     premium_add,
     premium_del,

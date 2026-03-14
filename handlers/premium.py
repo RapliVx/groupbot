@@ -4,8 +4,8 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from utils.config import OWNER_ID
-from utils import premium_service
-from utils import caca_db
+from database import premium_service
+from database import caca_db
 from utils import caca_memory
 
 
