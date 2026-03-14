@@ -2,7 +2,7 @@ import time
 import asyncio
 import sqlite3 
 
-from utils.db import db_session
+from database.db import db_session
 
 CACA_DB_PATH = "data/caca.sqlite3"
 
