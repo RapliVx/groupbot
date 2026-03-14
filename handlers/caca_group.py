@@ -2,7 +2,7 @@ import html
 from telegram import Update
 from telegram.ext import ContextTypes
 from utils.config import OWNER_ID
-from utils import caca_db
+from database import caca_db
 
 
 async def _is_admin_or_owner(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
