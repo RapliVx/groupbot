@@ -2,12 +2,12 @@ import asyncio
 import logging
 
 from fun.asupan import (
-    LOG_CHAT_ID,
     send_asupan_once,
     load_asupan_groups,
     load_autodel_groups,
 )
 
+from utils.config import LOG_CHAT_ID
 from handlers.welcome import load_welcome_chats, init_welcome_db, load_verified
 from handlers.nsfw import nsfw_db_init
 
