@@ -38,28 +38,49 @@ def _db_init():
         con.close()
 
 
-def _get_targets() -> list[int]:
+def _get_user_targets() -> list[int]:
     _db_init()
     con = sqlite3.connect(BROADCAST_DB)
     try:
-        users = con.execute(
+        rows = con.execute(
             "SELECT chat_id FROM broadcast_users WHERE enabled=1"
         ).fetchall()
-        groups = con.execute(
-            "SELECT chat_id FROM broadcast_groups WHERE enabled=1"
-        ).fetchall()
-        out = []
-        out.extend(int(r[0]) for r in users if r and r[0] is not None)
-        out.extend(int(r[0]) for r in groups if r and r[0] is not None)
-        return out
+        return [int(r[0]) for r in rows if r and r[0] is not None]
     finally:
         con.close()
+
+
+def _get_group_targets() -> list[int]:
+    _db_init()
+    con = sqlite3.connect(BROADCAST_DB)
+    try:
+        rows = con.execute(
+            "SELECT chat_id FROM broadcast_groups WHERE enabled=1"
+        ).fetchall()
+        return [int(r[0]) for r in rows if r and r[0] is not None]
+    finally:
+        con.close()
+
+
+def _get_targets(mode: str) -> list[int]:
+    if mode == "users":
+        return _get_user_targets()
+    if mode == "groups":
+        return _get_group_targets()
+
+    users = _get_user_targets()
+    groups = _get_group_targets()
+    return users + groups
 
 
 def _broadcast_keyboard(bid: str):
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("Send", callback_data=f"broadcast:send:{bid}"),
+            InlineKeyboardButton("Send Users", callback_data=f"broadcast:send:users:{bid}"),
+            InlineKeyboardButton("Send Groups", callback_data=f"broadcast:send:groups:{bid}"),
+        ],
+        [
+            InlineKeyboardButton("Send All", callback_data=f"broadcast:send:all:{bid}"),
             InlineKeyboardButton("Cancel", callback_data=f"broadcast:cancel:{bid}"),
         ]
     ])
@@ -73,6 +94,14 @@ def _cleanup_pending(max_age: int = 3600):
     ]
     for key in expired:
         BROADCAST_PENDING.pop(key, None)
+
+
+def _mode_label(mode: str) -> str:
+    if mode == "users":
+        return "Users Only"
+    if mode == "groups":
+        return "Groups Only"
+    return "All Targets"
 
 
 async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -103,7 +132,8 @@ async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     preview = (
         "<b>Broadcast Preview</b>\n\n"
         f"{text}\n\n"
-        "<i>This message has not been sent yet.</i>"
+        "<i>This message has not been sent yet.</i>\n"
+        "<i>Select target below.</i>"
     )
 
     await msg.reply_text(
@@ -119,12 +149,44 @@ async def broadcast_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if not q or not q.data:
         return
 
-    parts = q.data.split(":", 2)
-    if len(parts) != 3 or parts[0] != "broadcast":
+    parts = q.data.split(":")
+    if len(parts) < 3 or parts[0] != "broadcast":
         return
 
-    _, action, bid = parts
     user = q.from_user
+
+    if parts[1] == "cancel":
+        if len(parts) != 3:
+            return
+        bid = parts[2]
+        data = BROADCAST_PENDING.get(bid)
+
+        if not data:
+            await q.answer("Broadcast request expired.", show_alert=True)
+            try:
+                await q.edit_message_reply_markup(reply_markup=None)
+            except Exception:
+                pass
+            return
+
+        if not user or user.id != data["owner_id"] or user.id not in OWNER_ID:
+            return await q.answer("This is not your broadcast.", show_alert=True)
+
+        BROADCAST_PENDING.pop(bid, None)
+        await q.answer("Broadcast cancelled.")
+        return await q.edit_message_text(
+            "<b>Broadcast cancelled</b>",
+            parse_mode="HTML",
+        )
+
+    if len(parts) != 4 or parts[1] != "send":
+        return await q.answer()
+
+    mode = parts[2]
+    bid = parts[3]
+
+    if mode not in ("users", "groups", "all"):
+        return await q.answer("Invalid target mode.", show_alert=True)
 
     data = BROADCAST_PENDING.get(bid)
     if not data:
@@ -138,22 +200,22 @@ async def broadcast_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if not user or user.id != data["owner_id"] or user.id not in OWNER_ID:
         return await q.answer("This is not your broadcast.", show_alert=True)
 
-    if action == "cancel":
+    text = data["text"]
+    targets = _get_targets(mode)
+
+    if not targets:
         BROADCAST_PENDING.pop(bid, None)
-        await q.answer("Broadcast cancelled.")
+        await q.answer()
         return await q.edit_message_text(
-            "<b>Broadcast cancelled</b>",
+            f"<b>Broadcast aborted</b>\n\nNo targets found for <b>{_mode_label(mode)}</b>.",
             parse_mode="HTML",
         )
 
-    if action != "send":
-        return await q.answer()
-
-    await q.answer("Starting broadcast...")
-    text = data["text"]
+    await q.answer(f"Starting broadcast to {_mode_label(mode)}...")
 
     await q.edit_message_text(
         "<b>Broadcast started...</b>\n\n"
+        f"<b>Target:</b> {_mode_label(mode)}\n\n"
         f"{text}",
         parse_mode="HTML",
         disable_web_page_preview=True,
@@ -161,7 +223,6 @@ async def broadcast_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     sent = 0
     failed = 0
-    targets = _get_targets()
 
     for cid in targets:
         try:
@@ -195,6 +256,7 @@ async def broadcast_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     await q.edit_message_text(
         "<b>Broadcast finished</b>\n\n"
+        f"<b>Target:</b> {_mode_label(mode)}\n"
         f"Sent: <b>{sent}</b>\n"
         f"Failed: <b>{failed}</b>\n\n"
         "<b>Message:</b>\n"
