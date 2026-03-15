@@ -236,7 +236,7 @@ async def instagram_api_download(
                             chat_id=chat_id,
                             message_id=status_msg_id,
                             text=(
-                                "<b>Downloading Instagram media...</b>\n\n"
+                                "<b>Download use sonzai api...</b>\n\n"
                                 f"<code>{progress_bar(pct)}</code>"
                             ),
                             parse_mode="HTML",
