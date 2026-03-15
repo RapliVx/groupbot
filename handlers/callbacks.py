@@ -28,5 +28,5 @@ def register_callbacks(app):
     app.add_handler(CallbackQueryHandler(update_cb, pattern=r"^update_"))
     app.add_handler(CallbackQueryHandler(music_callback, pattern=r"^music_download:"))
     app.add_handler(CallbackQueryHandler(quiz_callback, pattern=r"^quizans:"))
-    app.add_handler(CallbackQueryHandler(broadcast_callback, pattern=r"^broadcast:")
+    app.add_handler(CallbackQueryHandler(broadcast_callback, pattern=r"^broadcast:"))
     
