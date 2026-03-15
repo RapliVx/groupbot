@@ -14,6 +14,7 @@ psutil
 python-dateutil==2.9.0.post0
 six==1.17.0
 python-whois==0.9.6
+yt-dlp
 yt-dlp-ejs
 deep-translator
 dnspython
