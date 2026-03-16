@@ -13,7 +13,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from handlers.gsearch import google_search
-from utils.ai_utils import split_message, sanitize_ai_output, PERSONAS
+from utils.system_prompt import split_message, sanitize_ai_output, PERSONAS
 from utils.config import GROQ_BASE, GROQ_KEY, GROQ_MODEL2, GROQ_TIMEOUT
 from utils.http import get_http_session
 
