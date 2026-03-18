@@ -1,8 +1,6 @@
-import os
 import time
 import uuid
 import html
-import aiohttp
 
 from telegram import (
     InlineKeyboardMarkup,
@@ -12,18 +10,14 @@ from telegram import (
 from telegram.ext import ContextTypes
 
 from utils.http import get_http_session
-from utils.text import bold, code, italic, underline, link, mono
-from utils.config import (
-    GOOGLE_CSE_ID, 
-    GOOGLE_API_KEY,
-)
+from utils.config import GOOGLE_CSE_ID, GOOGLE_API_KEY
 
-#google search 
+
 GSEARCH_CACHE = {}
-MAX_GSEARCH_CACHE = 50         
-GSEARCH_CACHE_TTL = 300      
+MAX_GSEARCH_CACHE = 50
+GSEARCH_CACHE_TTL = 300
 
-#gsearch request
+
 async def google_search(query: str, page: int = 0, limit: int = 5):
     try:
         start = page * limit + 1
@@ -55,7 +49,16 @@ async def google_search(query: str, page: int = 0, limit: int = 5):
     except Exception as e:
         return False, str(e)
 
-#inline keyboard
+
+def _owner_label(user) -> str:
+    if not user:
+        return "pengguna ini"
+    if user.username:
+        return f"@{user.username}"
+    name = (user.first_name or "").strip()
+    return name or "pengguna ini"
+
+
 def gsearch_keyboard(search_id: str, page: int):
     return InlineKeyboardMarkup([
         [
@@ -68,7 +71,7 @@ def gsearch_keyboard(search_id: str, page: int):
         ]
     ])
 
-#gsearch cmd
+
 async def gsearch_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         return await update.message.reply_text(
@@ -78,6 +81,7 @@ async def gsearch_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     query = " ".join(context.args)
+    user = update.effective_user
     search_id = uuid.uuid4().hex[:8]
 
     if len(GSEARCH_CACHE) >= MAX_GSEARCH_CACHE:
@@ -86,7 +90,8 @@ async def gsearch_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     GSEARCH_CACHE[search_id] = {
         "query": query,
         "page": 0,
-        "user": update.effective_user.id,
+        "user": user.id,
+        "owner_label": _owner_label(user),
         "ts": time.time(),
     }
 
@@ -94,7 +99,7 @@ async def gsearch_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     ok, res = await google_search(query, 0)
     if not ok:
-        return await msg.edit_text(f"Error\n<code>{res}</code>", parse_mode="HTML")
+        return await msg.edit_text(f"Error\n<code>{html.escape(str(res))}</code>", parse_mode="HTML")
 
     if not res:
         return await msg.edit_text("No results found.")
@@ -104,7 +109,7 @@ async def gsearch_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text += (
             f"<b>{i}. {html.escape(r['title'])}</b>\n"
             f"{html.escape(r['snippet'])}\n"
-            f"{r['link']}\n\n"
+            f"{html.escape(r['link'])}\n\n"
         )
 
     await msg.edit_text(
@@ -115,7 +120,6 @@ async def gsearch_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-# callback
 async def gsearch_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
@@ -123,9 +127,23 @@ async def gsearch_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if q.data == "noop":
         return
 
-    _, a, b = q.data.split(":", 2)
+    parts = q.data.split(":", 2)
+    if len(parts) != 3 or parts[0] != "gsearch":
+        return
+
+    _, a, b = parts
 
     if a == "close":
+        data = GSEARCH_CACHE.get(b)
+        if not data:
+            return await q.message.delete()
+
+        if q.from_user.id != data["user"]:
+            return await q.answer(
+                f"Hanya {data['owner_label']} yang dapat mengakses ini",
+                show_alert=True
+            )
+
         GSEARCH_CACHE.pop(b, None)
         return await q.message.delete()
 
@@ -141,7 +159,10 @@ async def gsearch_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await q.message.edit_text("Search expired.")
 
     if q.from_user.id != data["user"]:
-        return await q.answer("This is not your search.", show_alert=True)
+        return await q.answer(
+            f"Hanya {data['owner_label']} yang dapat mengakses ini",
+            show_alert=True
+        )
 
     if page < 0:
         return
@@ -159,7 +180,7 @@ async def gsearch_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text += (
             f"<b>{i}. {html.escape(r['title'])}</b>\n"
             f"{html.escape(r['snippet'])}\n"
-            f"{r['link']}\n\n"
+            f"{html.escape(r['link'])}\n\n"
         )
 
     await q.message.edit_text(
