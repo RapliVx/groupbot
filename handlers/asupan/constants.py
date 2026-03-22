@@ -9,6 +9,8 @@ ASUPAN_AUTO_DELETE_SEC = 300
 ASUPAN_COOLDOWN_SEC = 5
 
 DEFAULT_ASUPAN_KEYWORDS = [
+    "acaawra0",
+    "pikaaw.ns",
     "cacaaaja39",
     "bancolmu0",
     "teerzas",
