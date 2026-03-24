@@ -136,7 +136,7 @@ async def douyin_download(url, bot, chat_id, status_msg_id):
                 downloaded += len(chunk)
 
                 import time
-                if total and time.time() - last >= 1.2:
+                if total and time.time() - last >= 3:
                     pct = downloaded / total * 100
                     await bot.edit_message_text(
                         chat_id=chat_id,
