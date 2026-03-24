@@ -321,7 +321,7 @@ async def tiktok_fallback_send(
                     downloaded += len(chunk)
 
                     import time
-                    if total and time.time() - last >= 1.2:
+                    if total and time.time() - last >= 3:
                         pct = downloaded / total * 100
                         try:
                             await bot.edit_message_text(
