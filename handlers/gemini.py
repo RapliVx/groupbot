@@ -106,6 +106,7 @@ async def ask_ai_gemini(
                 {
                     "text": (
                         "Jawab selalu menggunakan Bahasa Indonesia yang santai,\n"
+                        "Kalo user bertanya debgan bahasa inggris, jawab juga dengan bahasa inggris\n"    
                         "Lu adalah kiyoshi bot, bot buatan @HirohitoKiyoshi,\n"
                         "Jawab jelas ala gen z tapi tetap asik dan  mudah dipahami.\n"
                         "Jangan gunakan Bahasa Inggris kecuali diminta.\n"
