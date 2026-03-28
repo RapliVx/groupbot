@@ -4,16 +4,21 @@
 
 # Telegram Multi-Function Bot
 
-Bot Telegram multifungsi
+A multi-function Telegram bot built with Python and `python-telegram-bot`, providing AI features, downloader utilities, moderation tools, networking commands, and additional group management features.
 
-## Fitur
+## Features
 
-- AI Chat Bot — percakapan pintar dan responsif  
-- Downloader — unduh video, musik, dan file dari berbagai platform  
-- Networking Tools — cek IP, koneksi, dan utilitas jaringan  
-- Fun Commands — fitur hiburan ringan  
+- AI chat and assistant commands
+- Media downloader for multiple platforms
+- Google search integration
+- Networking and utility tools
+- Moderation and administration features
+- Group and verification features
+- Entertainment and miscellaneous commands
 
-## Quick Install (Recommended)
+## Quick Installation (Recommended)
+
+The recommended installation method is to use the provided installer script:
 
 ```
 git clone https://github.com/rifqi1146/groupbot.git
@@ -23,13 +28,31 @@ sudo bash install.sh
 ## Manual Installation
 ```
 apt install -y \
-    python3 \
-    python3-venv \
-    python3-pip \
-    git \
-    ffmpeg \
-    tesseract-ocr
+  python3 \
+  python3-venv \
+  python3-pip \
+  git \
+  ffmpeg \
+  curl \
+  unzip \
+  build-essential \
+  libjpeg-dev \
+  zlib1g-dev \
+  cmake \
+  libssl-dev \
+  gperf
 ```
+
+```
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash -
+sudo apt install -y nodejs
+```
+
+```
+curl -fsSL https://deno.land/install.sh | sh
+sudo ln -sf /root/.deno/bin/deno /usr/local/bin/deno
+```
+
 ```
 curl -L https://install.speedtest.net/app/cli/ookla-speedtest-1.2.0-linux-x86_64.tgz \
 | tar zx
@@ -66,22 +89,23 @@ nano .env
 BOT_TOKEN=
 GEMINI_API_KEY=
 GEMINI_MODEL=gemini-2.5-flash
+GEMINI_API_URL="https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}"
 GROQ_API_KEY=
 GOOGLE_API_KEY=
 GOOGLE_CSE_ID=
 BOT_OWNER_ID=
 LOG_CHAT_ID=
 API_ID=
-API_HASH=l
+API_HASH=
 SUPPORT_CH_ID=
 SUPPORT_CH_LINK=
 DONATE_URL=
+QUOTE_API_URI="http://127.0.0.1:3000"
 ```
 ```
 source .env
 ```
 ### Run Bot
 ```
-python bot.py
+python main.py
 ```
-
