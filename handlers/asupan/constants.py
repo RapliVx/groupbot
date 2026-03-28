@@ -11,6 +11,8 @@ ASUPAN_COOLDOWN_SEC = 5
 DEFAULT_ASUPAN_KEYWORDS = [
     "acaawra0",
     "pikaaw.ns",
+    "rynsawaw",
+    "_venzo21",
     "ntsa.bn",
     "cacaaaja39",
     "bancolmu0",
