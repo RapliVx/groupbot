@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+import socket
 import logging
 from telegram import Update
 from telegram.ext import ApplicationBuilder, JobQueue
@@ -11,7 +12,13 @@ from handlers.callbacks import register_callbacks
 from handlers.messages import register_messages
 from utils.startup import startup_tasks
 from utils.config import BOT_TOKEN
+
 BOT_USERNAME = None
+
+LOCAL_BOT_API_HOST = os.getenv("LOCAL_BOT_API_HOST", "127.0.0.1")
+LOCAL_BOT_API_PORT = int(os.getenv("LOCAL_BOT_API_PORT", "8081"))
+PREFER_LOCAL_BOT_API = os.getenv("PREFER_LOCAL_BOT_API", "1").strip().lower() not in ("0", "false", "no")
+
 
 class EmojiFormatter(logging.Formatter):
     EMOJI = {
@@ -42,15 +49,60 @@ def setup_logger():
 log = logging.getLogger(__name__)
 
 
+def _local_bot_api_available(host: str, port: int, timeout: float = 1.0) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def _build_application():
+    builder = (
+        ApplicationBuilder()
+        .token(BOT_TOKEN)
+        .job_queue(JobQueue())
+        .concurrent_updates(True)
+        .connect_timeout(30)
+        .read_timeout(60 * 20)
+        .write_timeout(60 * 20)
+        .pool_timeout(60)
+    )
+
+    if PREFER_LOCAL_BOT_API and _local_bot_api_available(LOCAL_BOT_API_HOST, LOCAL_BOT_API_PORT):
+        base = f"http://{LOCAL_BOT_API_HOST}:{LOCAL_BOT_API_PORT}"
+        log.info(f"✓ Using local Telegram Bot API at {base}")
+        builder = (
+            builder
+            .base_url(f"{base}/bot")
+            .base_file_url(f"{base}/file/bot")
+        )
+    else:
+        if PREFER_LOCAL_BOT_API:
+            log.warning("Local Telegram Bot API unavailable, falling back to official Telegram Bot API")
+        else:
+            log.info("✓ Local Telegram Bot API disabled, using official Telegram Bot API")
+
+    return builder.build()
+
+
 async def post_init(app):
     global BOT_USERNAME
 
     try:
-        me = await app.bot.get_me()
-        BOT_USERNAME = me.username.lower()
-        log.info(f"✓ Bot username loaded: @{BOT_USERNAME}")
+        await app.bot.delete_webhook(drop_pending_updates=True)
     except Exception as e:
-        log.warning(f"⚠️ Failed to get bot username: {e}")
+        log.warning(f"Failed to clear webhook/pending updates: {e}")
+
+    try:
+        me = await app.bot.get_me()
+        BOT_USERNAME = (me.username or "").lower()
+        if BOT_USERNAME:
+            log.info(f"✓ Bot username loaded: @{BOT_USERNAME}")
+        else:
+            log.info("✓ Bot username loaded")
+    except Exception as e:
+        log.warning(f"Failed to get bot username: {e}")
 
     try:
         await app.bot.set_my_commands([
@@ -63,7 +115,7 @@ async def post_init(app):
             ("stats", "System statistics"),
             ("dl", "Download video"),
             ("ask", "Ask Gemini AI"),
-            ("music", "Search music"),            
+            ("music", "Search music"),
             ("caca", "Chat sama caca 😍"),
             ("groq", "Ask Groq AI"),
             ("gsearch", "Google search"),
@@ -72,14 +124,14 @@ async def post_init(app):
         ])
         log.info("✓ Bot commands set")
     except Exception as e:
-        log.warning(f"✓ Failed to set bot commands: {e}")
+        log.warning(f"Failed to set bot commands: {e}")
 
     try:
         cmds = await app.bot.get_my_commands()
         app.bot_data["commands"] = cmds
         log.info("✓ Cached bot commands: " + ", ".join(c.command for c in cmds))
     except Exception as e:
-        log.warning(f"⚠️ Failed to cache bot commands: {e}")
+        log.warning(f"Failed to cache bot commands: {e}")
 
     await startup_tasks(app)
     log.info("✓ Startup tasks executed")
@@ -94,19 +146,7 @@ def main():
     setup_logger()
     log.info("Initializing bot")
 
-    app = (
-        ApplicationBuilder()
-        .token(BOT_TOKEN)
-        .base_url("http://127.0.0.1:8081/bot")
-        .base_file_url("http://127.0.0.1:8081/file/bot")
-        .job_queue(JobQueue())
-        .concurrent_updates(True)
-        .connect_timeout(30)
-        .read_timeout(60 * 20)
-        .write_timeout(60 * 20)
-        .pool_timeout(60)
-        .build()
-    )
+    app = _build_application()
 
     app.post_init = post_init
     app.post_shutdown = post_shutdown
@@ -114,7 +154,7 @@ def main():
     register_commands(app)
     register_messages(app)
     register_callbacks(app)
-    
+
     banner = r"""
  ／l、
 （ﾟ､ ｡ ７   < Nya~ Master! Bot waking up…
