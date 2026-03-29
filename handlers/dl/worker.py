@@ -181,6 +181,42 @@ async def download_non_tiktok(
 
     if is_youtube_url(raw_url):
         try:
+            try:
+                await bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=status_msg_id,
+                    text="<b>Trying yt-dlp...</b>",
+                    parse_mode="HTML",
+                )
+            except Exception:
+                pass
+
+            return await ytdlp_download(
+                raw_url,
+                fmt_key,
+                bot,
+                chat_id,
+                status_msg_id,
+                format_id=format_id,
+                has_audio=has_audio,
+            )
+
+        except Exception as e:
+            print("[YTDLP YOUTUBE FAILED, FALLBACK TO SONZAI]", e)
+
+            try:
+                await bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=status_msg_id,
+                    text=(
+                        "<b>yt-dlp failed</b>\n\n"
+                        "<i>Falling back to Sonzai API...</i>"
+                    ),
+                    parse_mode="HTML",
+                )
+            except Exception:
+                pass
+
             return await sonzai_youtube_download(
                 raw_url=raw_url,
                 fmt_key=fmt_key,
@@ -189,8 +225,6 @@ async def download_non_tiktok(
                 status_msg_id=status_msg_id,
                 format_id=format_id,
             )
-        except Exception as e:
-            print("[SONZAI YOUTUBE API FALLBACK TO YTDLP]", e)
 
     return await ytdlp_download(
         raw_url,

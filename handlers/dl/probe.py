@@ -133,11 +133,20 @@ def _probe_resolutions_sync(url: str) -> list[dict]:
 async def get_resolutions(url: str) -> list[dict]:
     if is_youtube_url(url):
         try:
+            res = await asyncio.to_thread(_probe_resolutions_sync, url)
+            if res:
+                return res
+        except Exception as e:
+            print("[YTDLP RESOLUTION FAILED, FALLBACK TO SONZAI]", e)
+
+        try:
             res = await sonzai_get_resolutions(url)
             if res:
                 return res
         except Exception as e:
-            print("[SONZAI YOUTUBE RESOLUTION FALLBACK TO YTDLP]", e)
+            print("[SONZAI YOUTUBE RESOLUTION FAILED]", e)
+
+        return []
 
     return await asyncio.to_thread(_probe_resolutions_sync, url)
     
