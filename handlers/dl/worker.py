@@ -7,7 +7,7 @@ from .constants import TMP_DIR, MAX_TG_SIZE
 from .utils import detect_media_type
 from .ytdlp import ytdlp_download
 from .instagram_api import is_instagram_url, instagram_api_download
-
+from .youtube_api import is_youtube_url, sonzai_youtube_download
 
 def reencode_mp3(src_path: str) -> str:
     fixed_path = f"{TMP_DIR}/{uuid.uuid4().hex}_fixed.mp3"
@@ -178,6 +178,19 @@ async def download_non_tiktok(
             )
         except Exception as e:
             print("[INSTAGRAM API FALLBACK TO YTDLP]", e)
+
+    if is_youtube_url(raw_url):
+        try:
+            return await sonzai_youtube_download(
+                raw_url=raw_url,
+                fmt_key=fmt_key,
+                bot=bot,
+                chat_id=chat_id,
+                status_msg_id=status_msg_id,
+                format_id=format_id,
+            )
+        except Exception as e:
+            print("[SONZAI YOUTUBE API FALLBACK TO YTDLP]", e)
 
     return await ytdlp_download(
         raw_url,

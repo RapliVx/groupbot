@@ -4,7 +4,7 @@ import asyncio
 import json
 
 from .constants import COOKIES_PATH, MAX_TG_SIZE
-
+from .youtube_api import is_youtube_url, sonzai_get_resolutions
 
 def _pick_bestaudio_size(formats: list[dict]) -> int:
     best = None
@@ -131,5 +131,13 @@ def _probe_resolutions_sync(url: str) -> list[dict]:
 
 
 async def get_resolutions(url: str) -> list[dict]:
+    if is_youtube_url(url):
+        try:
+            res = await sonzai_get_resolutions(url)
+            if res:
+                return res
+        except Exception as e:
+            print("[SONZAI YOUTUBE RESOLUTION FALLBACK TO YTDLP]", e)
+
     return await asyncio.to_thread(_probe_resolutions_sync, url)
     
