@@ -59,7 +59,7 @@ from handlers.asupan import (
 
 COMMAND_HANDLERS = [
     ("start", start_cmd, True),
-    ("setting", setting_cmd, False),
+    ("settings", setting_cmd, False),
     ("q", q_cmd, False),
     ("kang", kang_cmd, False),
     ("cookies", cookies_cmd, False),

@@ -109,6 +109,7 @@ async def post_init(app):
             ("start", "Check bot status"),
             ("donate", "Support bot"),
             ("help", "Show help menu"),
+            ("settings", "User setting"),
             ("quiz", "random soal"),
             ("ping", "Check latency"),
             ("ship", "Choose couple"),
