@@ -383,19 +383,21 @@ async def ytdlp_download(
         if container not in ("mp4", "webm"):
             container = "mp4"
 
-        if format_id:
+        if format_id and container != "webm":
             if has_audio:
                 fmt = format_id
             else:
-                if container == "webm":
-                    fmt = f"{format_id}+bestaudio[ext=webm]/bestaudio"
-                else:
-                    fmt = f"{format_id}+bestaudio/best"
+                fmt = f"{format_id}+bestaudio/best"
         else:
             if container == "webm":
                 fmt = "bestvideo[ext=webm]+bestaudio[ext=webm]/bestvideo+bestaudio"
             else:
-                fmt = "bestvideo*+bestaudio/best"
+                if format_id and has_audio:
+                    fmt = format_id
+                elif format_id:
+                    fmt = f"{format_id}+bestaudio/best"
+                else:
+                    fmt = "bestvideo*+bestaudio/best"
 
         est_size = await asyncio.to_thread(_probe_total_size_sync, url, fmt)
         update_interval = 7 if (est_size and est_size >= _SIZE_100MB) else 2
