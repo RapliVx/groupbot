@@ -23,6 +23,7 @@ from .keyboards import dl_keyboard, res_keyboard, autodl_detect_keyboard
 from .probe import get_resolutions
 from .tiktok import is_tiktok, douyin_download, tiktok_fallback_send
 from .worker import download_non_tiktok, send_downloaded_media
+from database.user_settings_db import get_user_settings
 
 os.makedirs(TMP_DIR, exist_ok=True)
 
@@ -54,6 +55,125 @@ def is_youtube(url: str) -> bool:
     host = _host(url)
     return any(_host_match(host, d) for d in ("youtube.com", "youtu.be", "music.youtube.com", "pornhub.com"))
 
+def _pick_auto_resolution(res_map: dict[int, dict], preferred_height: int):
+    try:
+        preferred_height = int(preferred_height or 0)
+    except Exception:
+        preferred_height = 0
+
+    if preferred_height <= 0 or not res_map:
+        return None, None
+
+    candidates = []
+    for h, item in res_map.items():
+        try:
+            height = int(h)
+        except Exception:
+            continue
+
+        total_size = int(item.get("total_size") or item.get("filesize") or 0)
+        if total_size and total_size > MAX_TG_SIZE:
+            continue
+
+        candidates.append((height, item))
+
+    if not candidates:
+        return None, None
+
+    candidates.sort(key=lambda x: x[0], reverse=True)
+
+    for height, item in candidates:
+        if height == preferred_height:
+            return height, item
+
+    lower = [(height, item) for height, item in candidates if height <= preferred_height]
+    if lower:
+        lower.sort(key=lambda x: x[0], reverse=True)
+        return lower[0]
+
+    return candidates[0]
+
+
+async def _start_dl_task(context, message, data, fmt_key, format_id=None, has_audio=False, label=None):
+    await message.edit_text(
+        f"<b>Preparing {label or DL_FORMATS[fmt_key]['label']}...</b>",
+        parse_mode="HTML",
+    )
+
+    context.application.create_task(
+        _dl_worker(
+            app=context.application,
+            chat_id=message.chat.id,
+            reply_to=data["reply_to"],
+            raw_url=data["url"],
+            fmt_key=fmt_key,
+            status_msg_id=message.message_id,
+            format_id=format_id,
+            has_audio=has_audio,
+        )
+    )
+
+
+async def _process_choice(context, message, dl_id: str, data: dict, choice: str, user_id: int):
+    url = data["url"]
+
+    if choice == "video" and is_youtube(url):
+        await message.edit_text("🔎 <b>Fetching video formats...</b>", parse_mode="HTML")
+        res_list = await get_resolutions(url)
+
+        if not res_list:
+            DL_CACHE.pop(dl_id, None)
+            return await message.edit_text(
+                "No valid resolutions available (possibly all exceed Telegram limit).",
+                parse_mode="HTML",
+            )
+
+        res_map = {}
+        for r in res_list:
+            h = int(r.get("height") or 0)
+            fid = str(r.get("format_id") or "")
+            if h and fid:
+                res_map[h] = {
+                    "format_id": fid,
+                    "has_audio": bool(r.get("has_audio")),
+                    "filesize": int(r.get("filesize") or 0),
+                    "total_size": int(r.get("total_size") or 0),
+                }
+
+        settings = get_user_settings(user_id)
+        preferred_height = int(settings.get("youtube_resolution") or 0)
+
+        if preferred_height > 0:
+            picked_height, picked = _pick_auto_resolution(res_map, preferred_height)
+            if picked_height and picked:
+                DL_CACHE.pop(dl_id, None)
+                return await _start_dl_task(
+                    context=context,
+                    message=message,
+                    data=data,
+                    fmt_key="video",
+                    format_id=str(picked.get("format_id") or ""),
+                    has_audio=bool(picked.get("has_audio")),
+                    label=f"Video ({picked_height}p)",
+                )
+
+        DL_CACHE[dl_id]["res_map"] = res_map
+        return await message.edit_text(
+            "<b>Select resolution</b>",
+            reply_markup=res_keyboard(dl_id, res_list),
+            parse_mode="HTML",
+        )
+
+    DL_CACHE.pop(dl_id, None)
+    return await _start_dl_task(
+        context=context,
+        message=message,
+        data=data,
+        fmt_key=choice,
+        format_id=None,
+        has_audio=False,
+    )
+    
 async def _is_admin_or_owner(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     user = update.effective_user
     chat = update.effective_chat
@@ -147,9 +267,11 @@ async def auto_dl_detect(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_supported_platform(text):
         return
 
+    settings = get_user_settings(update.effective_user.id)
+
     if chat.type in ("group", "supergroup"):
         groups = load_auto_dl()
-        if chat.id not in groups:
+        if chat.id not in groups and not bool(settings.get("force_autodl")):
             return
 
     if not await require_join_or_block(update, context):
@@ -167,6 +289,22 @@ async def auto_dl_detect(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "ts": time.time(),
     }
 
+    auto_choice = str(settings.get("autodl_format") or "ask").lower()
+
+    if auto_choice in ("video", "mp3"):
+        status = await msg.reply_text(
+            f"📥 <b>Auto selecting {auto_choice.upper()}...</b>",
+            parse_mode="HTML",
+        )
+        return await _process_choice(
+            context=context,
+            message=status,
+            dl_id=dl_id,
+            data=DL_CACHE[dl_id],
+            choice=auto_choice,
+            user_id=update.effective_user.id,
+        )
+    
     await msg.reply_text(
         "👀 <b>Link detected</b>\n\nDo you want me to download it?",
         reply_markup=autodl_detect_keyboard(dl_id),
@@ -329,6 +467,23 @@ async def dl_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "reply_to": update.message.message_id,
     }
 
+    settings = get_user_settings(update.effective_user.id)
+    auto_choice = str(settings.get("autodl_format") or "ask").lower()
+
+    if auto_choice in ("video", "mp3"):
+        status = await update.message.reply_text(
+            f"📥 <b>Auto selecting {auto_choice.upper()}...</b>",
+            parse_mode="HTML",
+        )
+        return await _process_choice(
+            context=context,
+            message=status,
+            dl_id=dl_id,
+            data=DL_CACHE[dl_id],
+            choice=auto_choice,
+            user_id=update.effective_user.id,
+        )
+
     await update.message.reply_text(
         "📥 <b>Select format</b>",
         reply_markup=dl_keyboard(dl_id),
@@ -356,57 +511,13 @@ async def dl_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         DL_CACHE.pop(dl_id, None)
         return await q.edit_message_text("Cancelled")
 
-    url = data["url"]
-
-    if choice == "video" and is_youtube(url):
-        await q.edit_message_text("🔎 <b>Fetching video formats...</b>", parse_mode="HTML")
-        res_list = await get_resolutions(url)
-
-        if not res_list:
-            DL_CACHE.pop(dl_id, None)
-            return await q.edit_message_text(
-                "No valid resolutions available (possibly all exceed Telegram limit).",
-                parse_mode="HTML",
-            )
-
-        res_map = {}
-        for r in res_list:
-            h = int(r.get("height") or 0)
-            fid = str(r.get("format_id") or "")
-            if h and fid:
-                res_map[h] = {
-                    "format_id": fid,
-                    "has_audio": bool(r.get("has_audio")),
-                    "filesize": int(r.get("filesize") or 0),
-                    "total_size": int(r.get("total_size") or 0),
-                }
-
-        DL_CACHE[dl_id]["res_map"] = res_map
-
-        return await q.edit_message_text(
-            "<b>Select resolution</b>",
-            reply_markup=res_keyboard(dl_id, res_list),
-            parse_mode="HTML",
-        )
-
-    DL_CACHE.pop(dl_id, None)
-
-    await q.edit_message_text(
-        f"<b>Preparing {DL_FORMATS[choice]['label']}...</b>",
-        parse_mode="HTML",
-    )
-
-    context.application.create_task(
-        _dl_worker(
-            app=context.application,
-            chat_id=q.message.chat.id,
-            reply_to=data["reply_to"],
-            raw_url=url,
-            fmt_key=choice,
-            status_msg_id=q.message.message_id,
-            format_id=None,
-            has_audio=False,
-        )
+    return await _process_choice(
+        context=context,
+        message=q.message,
+        dl_id=dl_id,
+        data=data,
+        choice=choice,
+        user_id=q.from_user.id,
     )
 
 

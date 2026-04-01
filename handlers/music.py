@@ -7,6 +7,7 @@ import shutil
 import glob
 import html
 import tempfile
+from database.user_settings_db import get_user_settings
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 COOKIES_PATH = os.path.join(BASE_DIR, "..", "data", "cookies.txt")
@@ -39,9 +40,13 @@ def _search_music_sync(search_query: str):
     return entries[:5]
 
 
-def _download_music_sync(video_id: str):
+def _download_music_sync(video_id: str, output_format: str):
     if not shutil.which("ffmpeg"):
         raise Exception("FFmpeg is not installed on the system.")
+
+    output_format = str(output_format or "flac").lower().strip()
+    if output_format not in ("flac", "mp3"):
+        output_format = "flac"
 
     os.makedirs(DOWNLOADS_DIR, exist_ok=True)
     job_dir = tempfile.mkdtemp(prefix="music_", dir=DOWNLOADS_DIR)
@@ -52,7 +57,7 @@ def _download_music_sync(video_id: str):
         "outtmpl": os.path.join(job_dir, "%(title)s.%(ext)s"),
         "postprocessors": [{
             "key": "FFmpegExtractAudio",
-            "preferredcodec": "flac",
+            "preferredcodec": output_format,
             "preferredquality": "192",
         }],
     }
@@ -63,11 +68,12 @@ def _download_music_sync(video_id: str):
             download=True
         )
 
-    flac_files = glob.glob(os.path.join(job_dir, "*.flac"))
-    if not flac_files:
+    pattern = "*.mp3" if output_format == "mp3" else "*.flac"
+    files = glob.glob(os.path.join(job_dir, pattern))
+    if not files:
         raise Exception("Audio file not found.")
 
-    file_path = max(flac_files, key=os.path.getmtime)
+    file_path = max(files, key=os.path.getmtime)
     return info, file_path, job_dir
 
 
@@ -143,11 +149,21 @@ async def music_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query.message.reply_to_message:
         reply_to_id = query.message.reply_to_message.message_id
 
+    settings = get_user_settings(query.from_user.id)
+    output_format = str(settings.get("music_format") or "flac").lower()
+
     await query.edit_message_text(
         "⏳ <b>Downloading the song</b>\n\n"
-        "Please wait, the process is ongoing 🎶",
+        f"Output format: <b>{html.escape(output_format.upper())}</b>",
         parse_mode="HTML"
     )
+
+    try:
+        entry, file_path, job_dir = await asyncio.to_thread(
+            _download_music_sync,
+            video_id,
+            output_format,
+        )
 
     try:
         entry, file_path, job_dir = await asyncio.to_thread(_download_music_sync, video_id)

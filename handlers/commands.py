@@ -31,6 +31,7 @@ from handlers.cookies import cookies_cmd
 from handlers.donate import donate_cmd
 from handlers.quotly import q_cmd
 from handlers.kang import kang_cmd
+from handlers.setting import setting_cmd
 
 from handlers.caca import (
     meta_query,
@@ -58,6 +59,7 @@ from handlers.asupan import (
 
 COMMAND_HANDLERS = [
     ("start", start_cmd, True),
+    ("setting", setting_cmd, False),
     ("q", q_cmd, False),
     ("kang", kang_cmd, False),
     ("cookies", cookies_cmd, False),

@@ -12,6 +12,7 @@ from handlers.welcome import verify_answer_callback
 from handlers.music import music_callback
 from handlers.quiz import quiz_callback
 from handlers.broadcast import broadcast_callback
+from handlers.setting import setting_callback
 
 def register_callbacks(app):
     app.add_handler(CallbackQueryHandler(help_callback, pattern=r"^help:"))
@@ -29,4 +30,5 @@ def register_callbacks(app):
     app.add_handler(CallbackQueryHandler(music_callback, pattern=r"^music_download:"))
     app.add_handler(CallbackQueryHandler(quiz_callback, pattern=r"^quizans:"))
     app.add_handler(CallbackQueryHandler(broadcast_callback, pattern=r"^broadcast:"))
+    app.add_handler(CallbackQueryHandler(setting_callback, pattern=r"^setting:"))
     
