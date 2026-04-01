@@ -165,9 +165,6 @@ async def music_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             output_format,
         )
 
-    try:
-        entry, file_path, job_dir = await asyncio.to_thread(_download_music_sync, video_id)
-
         with open(file_path, "rb") as audio_file:
             await context.bot.send_audio(
                 chat_id=chat_id,
