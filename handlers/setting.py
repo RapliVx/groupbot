@@ -58,7 +58,7 @@ def _footer_buttons(user_id: int, source: str):
     if source == "help":
         return [
             [
-                InlineKeyboardButton("Back", callback_data="help:settings"),
+                InlineKeyboardButton("Back", callback_data=f"help:{user_id}:settings"),
                 InlineKeyboardButton("Close", callback_data=_cb(user_id, source, "close", "x")),
             ]
         ]

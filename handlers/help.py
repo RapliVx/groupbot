@@ -188,11 +188,6 @@ async def help_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not q or not q.data:
         return
 
-    try:
-        await q.answer()
-    except Exception:
-        pass
-
     parts = q.data.split(":", 2)
     if len(parts) != 3 or parts[0] != "help":
         return
@@ -200,16 +195,28 @@ async def help_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         owner_id = int(parts[1])
     except Exception:
+        try:
+            await q.answer("Menu help tidak valid.", show_alert=True)
+        except Exception:
+            pass
         return
 
     action = parts[2]
 
     if q.from_user.id != owner_id:
         try:
-            await q.answer("Hanya pengguna yang membuka menu ini yang dapat mengaksesnya", show_alert=True)
+            await q.answer(
+                "Hanya pengguna yang membuka menu ini yang dapat mengaksesnya",
+                show_alert=True
+            )
         except Exception:
             pass
         return
+
+    try:
+        await q.answer()
+    except Exception:
+        pass
 
     if action == "close":
         try:
