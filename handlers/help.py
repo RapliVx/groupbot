@@ -1,65 +1,77 @@
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton, Update
 from telegram.ext import ContextTypes
-from utils.text import bold, code, italic, underline, link, mono
 
-#menu/help
-def help_main_keyboard():
+from handlers.setting import render_settings_message
+
+
+def _help_cb(user_id: int, action: str) -> str:
+    return f"help:{int(user_id)}:{action}"
+
+
+def help_main_keyboard(user_id: int):
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("✨ Features", callback_data="help:features"),
-            InlineKeyboardButton("🤐 AI Chat", callback_data="help:ai"),
+            InlineKeyboardButton("✨ Features", callback_data=_help_cb(user_id, "features")),
+            InlineKeyboardButton("🤐 AI Chat", callback_data=_help_cb(user_id, "ai")),
         ],
         [
-            InlineKeyboardButton("🧠 Utilities", callback_data="help:utils"),
-            InlineKeyboardButton("🔐 Privacy", callback_data="help:privacy"),
+            InlineKeyboardButton("🧠 Utilities", callback_data=_help_cb(user_id, "utils")),
+            InlineKeyboardButton("🔐 Privacy", callback_data=_help_cb(user_id, "privacy")),
         ],
         [
-            InlineKeyboardButton("⚙️ Settings", callback_data="help:settings"),
+            InlineKeyboardButton("⚙️ Settings", callback_data=_help_cb(user_id, "settings")),
         ],
         [
-            InlineKeyboardButton("❌ Close", callback_data="help:close"),
+            InlineKeyboardButton("❌ Close", callback_data=_help_cb(user_id, "close")),
         ],
     ])
 
-def help_settings_keyboard():
+
+def help_settings_keyboard(user_id: int):
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("🍜 Asupan", callback_data="help:asupan"),
-            InlineKeyboardButton("🗑️ AutoDel", callback_data="help:autodel"),
+            InlineKeyboardButton("🍜 Asupan", callback_data=_help_cb(user_id, "asupan")),
+            InlineKeyboardButton("🗑️ AutoDel", callback_data=_help_cb(user_id, "autodel")),
         ],
         [
-            InlineKeyboardButton("⬇️ AutoDL", callback_data="help:autodl"),
-            InlineKeyboardButton("😍 Caca", callback_data="help:cacaa"),
+            InlineKeyboardButton("⬇️ AutoDL", callback_data=_help_cb(user_id, "autodl")),
+            InlineKeyboardButton("😍 Caca", callback_data=_help_cb(user_id, "cacaa")),
         ],
         [
-            InlineKeyboardButton("🔞 NSFW", callback_data="help:nsfw"),
-            InlineKeyboardButton("🛖 Welcome", callback_data="help:wlc"),
+            InlineKeyboardButton("🔞 NSFW", callback_data=_help_cb(user_id, "nsfw")),
+            InlineKeyboardButton("🛖 Welcome", callback_data=_help_cb(user_id, "wlc")),
         ],
         [
-            InlineKeyboardButton("🔙 Back", callback_data="help:menu"),
-            InlineKeyboardButton("❌ Close", callback_data="help:close"),
+            InlineKeyboardButton("👤 User Setting", callback_data=_help_cb(user_id, "user_setting")),
+        ],
+        [
+            InlineKeyboardButton("🔙 Back", callback_data=_help_cb(user_id, "menu")),
+            InlineKeyboardButton("❌ Close", callback_data=_help_cb(user_id, "close")),
         ],
     ])
 
-def help_back_keyboard():
+
+def help_back_keyboard(user_id: int):
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔙 Back", callback_data="help:menu")],
-        [InlineKeyboardButton("❌ Close", callback_data="help:close")],
+        [InlineKeyboardButton("🔙 Back", callback_data=_help_cb(user_id, "menu"))],
+        [InlineKeyboardButton("❌ Close", callback_data=_help_cb(user_id, "close"))],
     ])
 
-def help_settings_back_keyboard():
+
+def help_settings_back_keyboard(user_id: int):
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔙 Back", callback_data="help:settings")],
-        [InlineKeyboardButton("❌ Close", callback_data="help:close")],
+        [InlineKeyboardButton("🔙 Back", callback_data=_help_cb(user_id, "settings"))],
+        [InlineKeyboardButton("❌ Close", callback_data=_help_cb(user_id, "close"))],
     ])
-    
+
+
 HELP_TEXT = {
-    "help:menu": (
+    "menu": (
         "📖 <b>Help Menu</b>\n"
         "Select a category to see available commands."
     ),
 
-    "help:features": (
+    "features": (
         "✨ <b>Main Features</b>\n\n"
         "• ⬇️ <code>/dl</code> — Download videos from supported platforms\n"
         "• 🍜 <code>/asupan</code> — Random TikTok content\n"
@@ -76,7 +88,7 @@ HELP_TEXT = {
         "• 🎴 <code>/kang</code> — Add sticker to your pack\n"
     ),
 
-    "help:ai": (
+    "ai": (
         "🤐 <b>AI Chat</b>\n\n"
         "• 💬 <code>/ai</code> — Chat with Gemini AI\n"
         "• 🧠 <code>/ask</code> — Chat with ChatGPT\n"
@@ -84,7 +96,7 @@ HELP_TEXT = {
         "• 😍 <code>/caca</code> — Caca Chat Bot\n"
     ),
 
-    "help:utils": (
+    "utils": (
         "🛠️ <b>Utilities</b>\n\n"
         "• 🏓 <code>/ping</code> — Check bot response time\n"
         "• 📊 <code>/stats</code> — Bot & system statistics\n"
@@ -93,7 +105,7 @@ HELP_TEXT = {
         "• 🔍 <code>/whoisdomain</code> — Detailed domain lookup\n"
     ),
 
-    "help:privacy": (
+    "privacy": (
         "🔐 <b>User Privacy</b>\n\n"
         "By using this bot, users understand and agree that:\n\n"
         "• The bot owner may view and store the command history used by users\n"
@@ -109,112 +121,129 @@ HELP_TEXT = {
         "<b>❗ Do not send passwords, identification numbers, or other sensitive data.</b>\n\n"
         "By continuing to use this bot, users are considered to have agreed to this policy."
     ),
-}
 
-HELP_TEXT.update({
-    "help:settings": (
+    "settings": (
         "⚙️ <b>Bot Settings</b>\n\n"
         "Select a menu below to see detailed options for each feature."
     ),
 
-    "help:asupan": (
+    "asupan": (
         "🍜 <b>Asupan Settings</b>\n\n"
         "• <code>/asupann enable</code> — Enable asupan in the group\n"
         "• <code>/asupann disable</code> — Disable asupan in the group\n"
         "• <code>/asupann status</code> — Check asupan status\n\n"
     ),
 
-    "help:autodel": (
+    "autodel": (
         "🗑️ <b>Auto Delete Asupan</b>\n\n"
         "• <code>/autodel enable</code> — Enable auto-delete for asupan\n"
         "• <code>/autodel disable</code> — Disable auto-delete for asupan\n"
         "• <code>/autodel status</code> — Check auto-delete status\n\n"
     ),
 
-    "help:autodl": (
+    "autodl": (
         "⬇️ <b>Auto Download Link</b>\n\n"
         "• <code>/autodl enable</code> — Enable automatic link detection\n"
         "• <code>/autodl disable</code> — Disable automatic link detection\n"
         "• <code>/autodl status</code> — Check auto-detect status\n\n"
     ),
 
-    "help:cacaa": (
+    "cacaa": (
         "😍 <b>Caca Settings</b>\n\n"
         "• <code>/mode</code> — Change Caca persona (Premium Only)\n"
         "• <code>/cacaa enable</code> — Enable Caca in the group\n"
         "• <code>/cacaa disable</code> — Disable Caca in the group\n"
         "• <code>/cacaa status</code> — Check Caca status\n\n"
     ),
-    
-    "help:nsfw": (
+
+    "nsfw": (
         "🔞 <b>NSFW Settings</b>\n\n"
         "• <code>/nsfw enable</code> — Enable NSFW in the group\n"
         "• <code>/nsfw disable</code> — Disable NSFW in the group\n"
         "• <code>/nsfw status</code> — Check NSFW status\n\n"
     ),
-    
-    "help:wlc": (
+
+    "wlc": (
         "🛖 <b>Welcome Settings</b>\n\n"
         "• <code>/wlc enable</code> — Enable welcome messages\n"
         "• <code>/wlc disable</code> — Disable welcome messages\n\n"
     ),
-})
+}
 
-#cmd
+
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if not update.message or not user:
+        return
+
     await update.message.reply_text(
-        HELP_TEXT["help:menu"],
-        reply_markup=help_main_keyboard(),
+        HELP_TEXT["menu"],
+        reply_markup=help_main_keyboard(user.id),
         parse_mode="HTML"
     )
 
-#helpcallback
+
 async def help_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
-    if not q:
+    if not q or not q.data:
         return
 
-    data = q.data or ""
-
-    #ack
     try:
         await q.answer()
     except Exception:
         pass
 
-    #close
-    if data == "help:close":
+    parts = q.data.split(":", 2)
+    if len(parts) != 3 or parts[0] != "help":
+        return
+
+    try:
+        owner_id = int(parts[1])
+    except Exception:
+        return
+
+    action = parts[2]
+
+    if q.from_user.id != owner_id:
+        try:
+            await q.answer("Hanya pengguna yang membuka menu ini yang dapat mengaksesnya", show_alert=True)
+        except Exception:
+            pass
+        return
+
+    if action == "close":
         try:
             await q.message.delete()
         except Exception:
             pass
         return
 
-    #menu/helpp
-    if data == "help:menu":
+    if action == "menu":
         await q.edit_message_text(
-            HELP_TEXT["help:menu"],
-            reply_markup=help_main_keyboard(),
+            HELP_TEXT["menu"],
+            reply_markup=help_main_keyboard(owner_id),
             parse_mode="HTML"
         )
         return
-    
-    if data == "help:settings":
+
+    if action == "settings":
         await q.edit_message_text(
-            HELP_TEXT["help:settings"],
-            reply_markup=help_settings_keyboard(),
+            HELP_TEXT["settings"],
+            reply_markup=help_settings_keyboard(owner_id),
             parse_mode="HTML"
         )
         return
-        
-    #category  
-    text = HELP_TEXT.get(data)
+
+    if action == "user_setting":
+        return await render_settings_message(q.message, owner_id, source="help")
+
+    text = HELP_TEXT.get(action)
     if text:
-        if data.startswith(("help:asupan", "help:autodel", "help:autodl", "help:cacaa", "help:nsfw","help:wlc")):
-            kb = help_settings_back_keyboard()
+        if action in ("asupan", "autodel", "autodl", "cacaa", "nsfw", "wlc"):
+            kb = help_settings_back_keyboard(owner_id)
         else:
-            kb = help_back_keyboard()
-    
+            kb = help_back_keyboard(owner_id)
+
         await q.edit_message_text(
             text,
             reply_markup=kb,

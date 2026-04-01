@@ -36,6 +36,13 @@ def _fmt_music(v: str) -> str:
     return mapping.get(str(v).lower(), "FLAC")
 
 
+def _cb(user_id: int, source: str, action: str, key: str, value: str | int | None = None) -> str:
+    parts = ["setting", str(user_id), source, action, key]
+    if value is not None:
+        parts.append(str(value))
+    return ":".join(parts)
+
+
 def _settings_text(user_id: int) -> str:
     s = get_user_settings(user_id)
     return (
@@ -47,43 +54,54 @@ def _settings_text(user_id: int) -> str:
     )
 
 
-def _main_keyboard(user_id: int) -> InlineKeyboardMarkup:
+def _footer_buttons(user_id: int, source: str):
+    if source == "help":
+        return [
+            [
+                InlineKeyboardButton("Back", callback_data="help:settings"),
+                InlineKeyboardButton("Close", callback_data=_cb(user_id, source, "close", "x")),
+            ]
+        ]
+    return [
+        [
+            InlineKeyboardButton("Close", callback_data=_cb(user_id, source, "close", "x")),
+        ]
+    ]
+
+
+def _main_keyboard(user_id: int, source: str = "direct") -> InlineKeyboardMarkup:
     s = get_user_settings(user_id)
-    return InlineKeyboardMarkup([
+    rows = [
         [
             InlineKeyboardButton(
                 f"AutoDL All Groups: {_fmt_bool(s['force_autodl'])}",
-                callback_data=f"setting:{user_id}:toggle:force_autodl",
+                callback_data=_cb(user_id, source, "toggle", "force_autodl"),
             )
         ],
         [
             InlineKeyboardButton(
                 f"Downloader Format: {_fmt_autodl_format(s['autodl_format'])}",
-                callback_data=f"setting:{user_id}:menu:autodl_format",
+                callback_data=_cb(user_id, source, "menu", "autodl_format"),
             )
         ],
         [
             InlineKeyboardButton(
                 f"YouTube Resolution: {_fmt_res(s['youtube_resolution'])}",
-                callback_data=f"setting:{user_id}:menu:youtube_resolution",
+                callback_data=_cb(user_id, source, "menu", "youtube_resolution"),
             )
         ],
         [
             InlineKeyboardButton(
                 f"Music Format: {_fmt_music(s['music_format'])}",
-                callback_data=f"setting:{user_id}:menu:music_format",
+                callback_data=_cb(user_id, source, "menu", "music_format"),
             )
         ],
-        [
-            InlineKeyboardButton(
-                "Close",
-                callback_data=f"setting:{user_id}:close:x",
-            )
-        ],
-    ])
+    ]
+    rows.extend(_footer_buttons(user_id, source))
+    return InlineKeyboardMarkup(rows)
 
 
-def _autodl_format_keyboard(user_id: int) -> InlineKeyboardMarkup:
+def _autodl_format_keyboard(user_id: int, source: str = "direct") -> InlineKeyboardMarkup:
     s = get_user_settings(user_id)
     current = str(s["autodl_format"]).lower()
 
@@ -92,17 +110,17 @@ def _autodl_format_keyboard(user_id: int) -> InlineKeyboardMarkup:
 
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton(label("ask", "Ask"), callback_data=f"setting:{user_id}:set:autodl_format:ask"),
-            InlineKeyboardButton(label("video", "Video"), callback_data=f"setting:{user_id}:set:autodl_format:video"),
-            InlineKeyboardButton(label("mp3", "MP3"), callback_data=f"setting:{user_id}:set:autodl_format:mp3"),
+            InlineKeyboardButton(label("ask", "Ask"), callback_data=_cb(user_id, source, "set", "autodl_format", "ask")),
+            InlineKeyboardButton(label("video", "Video"), callback_data=_cb(user_id, source, "set", "autodl_format", "video")),
+            InlineKeyboardButton(label("mp3", "MP3"), callback_data=_cb(user_id, source, "set", "autodl_format", "mp3")),
         ],
         [
-            InlineKeyboardButton("Back", callback_data=f"setting:{user_id}:menu:main")
+            InlineKeyboardButton("Back", callback_data=_cb(user_id, source, "menu", "main"))
         ],
     ])
 
 
-def _youtube_resolution_keyboard(user_id: int) -> InlineKeyboardMarkup:
+def _youtube_resolution_keyboard(user_id: int, source: str = "direct") -> InlineKeyboardMarkup:
     s = get_user_settings(user_id)
     current = int(s["youtube_resolution"] or 0)
 
@@ -112,21 +130,21 @@ def _youtube_resolution_keyboard(user_id: int) -> InlineKeyboardMarkup:
 
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton(label(0), callback_data=f"setting:{user_id}:set:youtube_resolution:0"),
-            InlineKeyboardButton(label(360), callback_data=f"setting:{user_id}:set:youtube_resolution:360"),
-            InlineKeyboardButton(label(480), callback_data=f"setting:{user_id}:set:youtube_resolution:480"),
+            InlineKeyboardButton(label(0), callback_data=_cb(user_id, source, "set", "youtube_resolution", 0)),
+            InlineKeyboardButton(label(360), callback_data=_cb(user_id, source, "set", "youtube_resolution", 360)),
+            InlineKeyboardButton(label(480), callback_data=_cb(user_id, source, "set", "youtube_resolution", 480)),
         ],
         [
-            InlineKeyboardButton(label(720), callback_data=f"setting:{user_id}:set:youtube_resolution:720"),
-            InlineKeyboardButton(label(1080), callback_data=f"setting:{user_id}:set:youtube_resolution:1080"),
+            InlineKeyboardButton(label(720), callback_data=_cb(user_id, source, "set", "youtube_resolution", 720)),
+            InlineKeyboardButton(label(1080), callback_data=_cb(user_id, source, "set", "youtube_resolution", 1080)),
         ],
         [
-            InlineKeyboardButton("Back", callback_data=f"setting:{user_id}:menu:main")
+            InlineKeyboardButton("Back", callback_data=_cb(user_id, source, "menu", "main"))
         ],
     ])
 
 
-def _music_format_keyboard(user_id: int) -> InlineKeyboardMarkup:
+def _music_format_keyboard(user_id: int, source: str = "direct") -> InlineKeyboardMarkup:
     s = get_user_settings(user_id)
     current = str(s["music_format"]).lower()
 
@@ -135,13 +153,21 @@ def _music_format_keyboard(user_id: int) -> InlineKeyboardMarkup:
 
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton(label("flac", "FLAC"), callback_data=f"setting:{user_id}:set:music_format:flac"),
-            InlineKeyboardButton(label("mp3", "MP3"), callback_data=f"setting:{user_id}:set:music_format:mp3"),
+            InlineKeyboardButton(label("flac", "FLAC"), callback_data=_cb(user_id, source, "set", "music_format", "flac")),
+            InlineKeyboardButton(label("mp3", "MP3"), callback_data=_cb(user_id, source, "set", "music_format", "mp3")),
         ],
         [
-            InlineKeyboardButton("Back", callback_data=f"setting:{user_id}:menu:main")
+            InlineKeyboardButton("Back", callback_data=_cb(user_id, source, "menu", "main"))
         ],
     ])
+
+
+async def render_settings_message(message, user_id: int, source: str = "direct"):
+    return await message.edit_text(
+        _settings_text(user_id),
+        parse_mode="HTML",
+        reply_markup=_main_keyboard(user_id, source),
+    )
 
 
 async def setting_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -154,7 +180,7 @@ async def setting_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await msg.reply_text(
         _settings_text(user.id),
         parse_mode="HTML",
-        reply_markup=_main_keyboard(user.id),
+        reply_markup=_main_keyboard(user.id, "direct"),
     )
 
 
@@ -164,7 +190,7 @@ async def setting_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     parts = q.data.split(":")
-    if len(parts) < 4 or parts[0] != "setting":
+    if len(parts) < 5 or parts[0] != "setting":
         return
 
     try:
@@ -175,8 +201,9 @@ async def setting_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if q.from_user.id != owner_id:
         return await q.answer("Ini bukan menu setting kamu.", show_alert=True)
 
-    action = parts[2]
-    key = parts[3]
+    source = parts[2]
+    action = parts[3]
+    key = parts[4]
 
     if action == "close":
         await q.answer()
@@ -189,7 +216,7 @@ async def setting_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await q.message.edit_text(
             _settings_text(owner_id),
             parse_mode="HTML",
-            reply_markup=_main_keyboard(owner_id),
+            reply_markup=_main_keyboard(owner_id, source),
         )
 
     if action == "menu":
@@ -199,37 +226,37 @@ async def setting_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return await q.message.edit_text(
                 _settings_text(owner_id),
                 parse_mode="HTML",
-                reply_markup=_main_keyboard(owner_id),
+                reply_markup=_main_keyboard(owner_id, source),
             )
 
         if key == "autodl_format":
             return await q.message.edit_text(
                 _settings_text(owner_id),
                 parse_mode="HTML",
-                reply_markup=_autodl_format_keyboard(owner_id),
+                reply_markup=_autodl_format_keyboard(owner_id, source),
             )
 
         if key == "youtube_resolution":
             return await q.message.edit_text(
                 _settings_text(owner_id),
                 parse_mode="HTML",
-                reply_markup=_youtube_resolution_keyboard(owner_id),
+                reply_markup=_youtube_resolution_keyboard(owner_id, source),
             )
 
         if key == "music_format":
             return await q.message.edit_text(
                 _settings_text(owner_id),
                 parse_mode="HTML",
-                reply_markup=_music_format_keyboard(owner_id),
+                reply_markup=_music_format_keyboard(owner_id, source),
             )
 
         return
 
     if action == "set":
-        if len(parts) < 5:
+        if len(parts) < 6:
             return await q.answer("Invalid setting value.", show_alert=True)
 
-        value = parts[4]
+        value = parts[5]
 
         if key == "autodl_format":
             set_autodl_format(owner_id, value)
@@ -250,5 +277,5 @@ async def setting_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await q.message.edit_text(
             _settings_text(owner_id),
             parse_mode="HTML",
-            reply_markup=_main_keyboard(owner_id),
+            reply_markup=_main_keyboard(owner_id, source),
         )
