@@ -7,7 +7,7 @@ from utils.text import bold, code, italic, underline, link, mono
 
 def helpowner_keyboard():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("❌ Close", callback_data="helpowner:close")]
+        [InlineKeyboardButton("Close", callback_data="helpowner:close")]
     ])
 
 

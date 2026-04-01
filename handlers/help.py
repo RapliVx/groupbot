@@ -206,7 +206,7 @@ async def help_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if q.from_user.id != owner_id:
         try:
             await q.answer(
-                "Hanya pengguna yang membuka menu ini yang dapat mengaksesnya",
+                "Only the user who opened this menu can access it",
                 show_alert=True
             )
         except Exception:
