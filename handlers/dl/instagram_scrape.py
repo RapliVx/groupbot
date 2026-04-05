@@ -20,11 +20,60 @@ from .instagram_api import is_instagram_url
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36"
 
 
-def _build_caption(source: str, count: int) -> str:
-    label = "Instagram Media" if count > 1 else "Instagram Post"
+def _truncate_text(text: str, limit: int) -> str:
+    text = (text or "").strip()
+    if limit <= 0:
+        return ""
+    if len(text) <= limit:
+        return text
+    if limit <= 3:
+        return "." * limit
+    return text[:limit - 3].rstrip() + "..."
+
+
+def _build_caption(source: str, count: int, bot_name: str, max_len: int = 1024) -> str:
+    clean_title = "Instagram Media" if count > 1 else "Instagram Post"
+    clean_desc = f"Source: {source}" if source else ""
+    clean_bot = (bot_name or "Bot").strip() or "Bot"
+
+    footer_plain = f"🪄 Powered by {clean_bot}"
+
+    def plain_len(t: str, d: str) -> int:
+        if d:
+            return len(f"📸 {t}\n\n{d}\n\n{footer_plain}")
+        return len(f"📸 {t}\n\n{footer_plain}")
+
+    short_title = clean_title
+    short_desc = clean_desc
+
+    if short_desc:
+        allowed_desc = max_len - len(f"📸 {short_title}\n\n\n\n{footer_plain}")
+        short_desc = _truncate_text(short_desc, allowed_desc)
+
+    if plain_len(short_title, short_desc) > max_len:
+        if short_desc:
+            allowed_title = max_len - len(f"📸 \n\n{short_desc}\n\n{footer_plain}")
+        else:
+            allowed_title = max_len - len(f"📸 \n\n{footer_plain}")
+        short_title = _truncate_text(short_title, allowed_title)
+
+    if short_desc and plain_len(short_title, short_desc) > max_len:
+        allowed_desc = max_len - len(f"📸 {short_title}\n\n\n\n{footer_plain}")
+        short_desc = _truncate_text(short_desc, allowed_desc)
+
+    if not short_title:
+        short_title = "Instagram Media"
+
+    if short_desc:
+        return (
+            f"<blockquote expandable>📸 {html.escape(short_title)}</blockquote>\n\n"
+            f"{html.escape(short_desc)}\n\n"
+            f"🪄 <i>Powered by {html.escape(clean_bot)}</i>"
+        )
+
     return (
-        f"<blockquote expandable>{html.escape(label)}</blockquote>\n\n"
-        f"🪄 <i>Source: {html.escape(source)}</i>"
+        f"<blockquote expandable>📸 {html.escape(short_title)}</blockquote>\n\n"
+        f"🪄 <i>Powered by {html.escape(clean_bot)}</i>"
     )
 
 
@@ -304,7 +353,8 @@ def _dedupe_downloaded_items(items: list[dict]) -> list[dict]:
 
 
 async def _send_ig_result(bot, chat_id: int, reply_to: int, items: list[dict], source: str):
-    caption = _build_caption(source, len(items))
+    bot_name = (await bot.get_me()).first_name or "Bot"
+    caption = _build_caption(source, len(items), bot_name)
     album_chunk_size = 10
     album_cooldown = 3
 
