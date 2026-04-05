@@ -5,8 +5,8 @@ import uuid
 import aiohttp
 import aiofiles
 from urllib.parse import urlparse, parse_qs, unquote
-
 from telegram import Update, InputMediaPhoto, InputMediaVideo
+from telegram.error import RetryAfter
 from telegram.ext import ContextTypes
 
 from handlers.join import require_join_or_block
@@ -240,41 +240,51 @@ async def _download_remote_media(url: str, source: str = "") -> dict:
 
 async def _send_ig_result(bot, chat_id: int, reply_to: int, items: list[dict], source: str):
     caption = _build_caption(source, len(items))
+    ALBUM_CHUNK_SIZE = 10
+    ALBUM_COOLDOWN = 3
 
     if len(items) == 1:
         item = items[0]
-        with open(item["path"], "rb") as f:
-            if item["type"] == "video":
-                await bot.send_video(
-                    chat_id=chat_id,
-                    video=f,
-                    caption=caption,
-                    parse_mode="HTML",
-                    reply_to_message_id=reply_to,
-                    supports_streaming=True,
-                )
-            else:
-                await bot.send_photo(
-                    chat_id=chat_id,
-                    photo=f,
-                    caption=caption,
-                    parse_mode="HTML",
-                    reply_to_message_id=reply_to,
-                )
+
+        while True:
+            try:
+                with open(item["path"], "rb") as f:
+                    if item["type"] == "video":
+                        await bot.send_video(
+                            chat_id=chat_id,
+                            video=f,
+                            caption=caption,
+                            parse_mode="HTML",
+                            reply_to_message_id=reply_to,
+                            supports_streaming=True,
+                        )
+                    else:
+                        await bot.send_photo(
+                            chat_id=chat_id,
+                            photo=f,
+                            caption=caption,
+                            parse_mode="HTML",
+                            reply_to_message_id=reply_to,
+                        )
+                break
+            except RetryAfter as e:
+                wait_time = int(getattr(e, "retry_after", ALBUM_COOLDOWN)) + 1
+                await asyncio.sleep(wait_time)
+
         return
 
-    chunk_size = 10
-    for start in range(0, len(items), chunk_size):
-        chunk = items[start:start + chunk_size]
+    chunks = [items[i:i + ALBUM_CHUNK_SIZE] for i in range(0, len(items), ALBUM_CHUNK_SIZE)]
+
+    for idx, chunk in enumerate(chunks):
         media = []
         handles = []
 
         try:
-            for idx, item in enumerate(chunk):
+            for i, item in enumerate(chunk):
                 fh = open(item["path"], "rb")
                 handles.append(fh)
 
-                is_first = start == 0 and idx == 0
+                is_first = idx == 0 and i == 0
                 item_caption = caption if is_first else None
                 item_parse_mode = "HTML" if is_first else None
 
@@ -296,11 +306,21 @@ async def _send_ig_result(bot, chat_id: int, reply_to: int, items: list[dict], s
                         )
                     )
 
-            await bot.send_media_group(
-                chat_id=chat_id,
-                media=media,
-                reply_to_message_id=reply_to if start == 0 else None,
-            )
+            while True:
+                try:
+                    await bot.send_media_group(
+                        chat_id=chat_id,
+                        media=media,
+                        reply_to_message_id=reply_to if idx == 0 else None,
+                    )
+                    break
+                except RetryAfter as e:
+                    wait_time = int(getattr(e, "retry_after", ALBUM_COOLDOWN)) + 1
+                    await asyncio.sleep(wait_time)
+
+            if idx < len(chunks) - 1:
+                await asyncio.sleep(ALBUM_COOLDOWN)
+
         finally:
             for fh in handles:
                 try:
