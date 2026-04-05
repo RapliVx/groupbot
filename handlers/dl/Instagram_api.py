@@ -266,7 +266,11 @@ def _decode_indown_fetch(link: str) -> str:
         qs = parse_qs(parsed.query)
         raw = (qs.get("url") or [""])[0]
         raw = unquote(raw or "").strip()
-        return raw or link
+
+        if raw.startswith("http://") or raw.startswith("https://"):
+            return raw
+
+        return link
     except Exception:
         return link
 
@@ -274,18 +278,29 @@ def _decode_indown_fetch(link: str) -> str:
 def _collect_urls_from_html(text: str) -> list[str]:
     found = []
 
-    for match in re.findall(r'''(?:src|href)=["']([^"']+)["']''', text, flags=re.I):
-        link = (match or "").strip()
+    def normalize_link(link: str) -> str:
+        link = (link or "").strip()
         if not link:
-            continue
+            return ""
+
+        link = link.replace("&amp;", "&")
+
         if "indown.io/fetch" in link:
             link = _decode_indown_fetch(link)
-        link = link.replace("&amp;", "&")
+
+        return link.strip()
+
+    for match in re.findall(r'''(?:src|href)=["']([^"']+)["']''', text, flags=re.I):
+        link = normalize_link(match)
+        if not link:
+            continue
         if re.search(r"(cdninstagram\.com|fbcdn\.net|d\.rapidcdn\.app)", link, flags=re.I):
             found.append(link)
 
     for match in re.findall(r'''https://[^"'\s<>]+''', text, flags=re.I):
-        link = (match or "").strip().replace("&amp;", "&")
+        link = normalize_link(match)
+        if not link:
+            continue
         if re.search(r"(cdninstagram\.com|fbcdn\.net|d\.rapidcdn\.app)", link, flags=re.I):
             found.append(link)
 
