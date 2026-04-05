@@ -15,9 +15,17 @@ from telegram.ext import ContextTypes
 from handlers.join import require_join_or_block
 from utils.http import get_http_session
 from .constants import TMP_DIR
-from .instagram_api import is_instagram_url
 
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36"
+
+
+def is_instagram_url(url: str) -> bool:
+    try:
+        host = (urlparse((url or "").strip()).hostname or "").lower()
+        return host == "instagram.com" or host.endswith(".instagram.com") or host == "instagr.am"
+    except Exception:
+        text = (url or "").lower()
+        return "instagram.com" in text or "instagr.am" in text
 
 async def igdl_download_for_fallback(bot, chat_id: int, reply_to: int, status_msg_id: int, url: str) -> dict:
     downloaded = []
