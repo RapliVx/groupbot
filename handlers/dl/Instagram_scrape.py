@@ -190,12 +190,27 @@ def _guess_ext(url: str, content_type: str) -> str:
     return ".jpg"
 
 
-async def _download_remote_media(url: str) -> dict:
+async def _download_remote_media(url: str, source: str = "") -> dict:
     session = await get_http_session()
+
+    headers = {
+        "User-Agent": USER_AGENT,
+        "Accept": "*/*",
+    }
+
+    lower_url = (url or "").lower()
+    source = (source or "").lower()
+
+    if "rapidcdn.app" in lower_url or source == "snapsave":
+        headers["Referer"] = "https://snapsave.app/"
+        headers["Origin"] = "https://snapsave.app"
+    elif "cdninstagram.com" in lower_url or "fbcdn.net" in lower_url or source == "indown":
+        headers["Referer"] = "https://www.instagram.com/"
+        headers["Origin"] = "https://www.instagram.com"
 
     async with session.get(
         url,
-        headers={"User-Agent": USER_AGENT},
+        headers=headers,
         allow_redirects=True,
         timeout=aiohttp.ClientTimeout(total=180),
     ) as resp:
@@ -327,6 +342,8 @@ async def ig_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not urls:
             raise RuntimeError("No downloadable media found")
 
+        failed_count = 0
+
         for idx, media_url in enumerate(urls, start=1):
             try:
                 await status.edit_text(
@@ -339,12 +356,32 @@ async def ig_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception:
                 pass
 
-            downloaded.append(await _download_remote_media(media_url))
+            try:
+                downloaded.append(await _download_remote_media(media_url, source=source))
+            except Exception as e:
+                failed_count += 1
+                print("[IG SCRAPER DOWNLOAD ERROR]", media_url, repr(e))
+                continue
 
-        await status.edit_text(
-            "<b>Uploading Instagram media...</b>",
-            parse_mode="HTML",
-        )
+        if not downloaded:
+            raise RuntimeError("All media downloads failed")
+
+        if failed_count:
+            try:
+                await status.edit_text(
+                    (
+                        "<b>Uploading Instagram media...</b>\n\n"
+                        f"<i>Downloaded {len(downloaded)} item(s), skipped {failed_count} item(s).</i>"
+                    ),
+                    parse_mode="HTML",
+                )
+            except Exception:
+                pass
+        else:
+            await status.edit_text(
+                "<b>Uploading Instagram media...</b>",
+                parse_mode="HTML",
+            )
 
         await _send_ig_result(
             bot=context.bot,
