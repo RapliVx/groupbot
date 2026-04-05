@@ -185,7 +185,6 @@ def _build_caption(source: str, count: int, bot_name: str, max_len: int = 1024) 
     if short_desc:
         return (
             f"<blockquote expandable>📸 {html.escape(short_title)}</blockquote>\n\n"
-            f"{html.escape(short_desc)}\n\n"
             f"🪄 <i>Powered by {html.escape(clean_bot)}</i>"
         )
 
