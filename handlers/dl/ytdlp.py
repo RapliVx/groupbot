@@ -135,31 +135,6 @@ def _collect_media_files_recursive(root_dir: str) -> list[str]:
 
     files.sort(key=lambda p: os.path.getmtime(p))
     return files
-    
-def _pick_latest_media_file_recursive(root_dir: str) -> str | None:
-    exts = (".mp4", ".mp3", ".jpg", ".jpeg", ".png", ".webp")
-    try:
-        files = []
-        for root, _, names in os.walk(root_dir):
-            for name in names:
-                if not name.lower().endswith(exts):
-                    continue
-                p = os.path.join(root, name)
-                if not os.path.isfile(p):
-                    continue
-                try:
-                    mt = os.path.getmtime(p)
-                except Exception:
-                    continue
-                files.append((mt, p))
-
-        if not files:
-            return None
-
-        files.sort(key=lambda x: x[0], reverse=True)
-        return files[0][1]
-    except Exception:
-        return None
         
 async def gallerydl_fallback(
     url: str,
@@ -167,6 +142,7 @@ async def gallerydl_fallback(
     bot,
     chat_id,
     status_msg_id,
+    status_text: str = "<b>yt-dlp failed, fallback to gallery-dl...</b>",
 ):
     GALLERY_DL = shutil.which("gallery-dl")
     if not GALLERY_DL:
@@ -181,7 +157,7 @@ async def gallerydl_fallback(
             await bot.edit_message_text(
                 chat_id=chat_id,
                 message_id=status_msg_id,
-                text="<b>yt-dlp failed, fallback to gallery-dl...</b>",
+                text=status_text,
                 parse_mode="HTML",
             )
         except Exception as e:
@@ -418,6 +394,7 @@ async def ytdlp_download(
                 bot=bot,
                 chat_id=chat_id,
                 status_msg_id=status_msg_id,
+                status_text="<b>Downloading with gallery-dl...</b>",
             )
             if fallback:
                 return fallback
