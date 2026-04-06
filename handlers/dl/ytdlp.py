@@ -22,11 +22,23 @@ def _looks_like_media_id(text: str) -> bool:
     s = (text or "").strip()
     return bool(s) and len(s) >= 8 and s.isdigit()
 
+def is_x_url(url: str) -> bool:
+    try:
+        host = (urlparse((url or "").strip()).hostname or "").lower()
+        return host in ("x.com", "www.x.com", "twitter.com", "www.twitter.com", "mobile.twitter.com")
+    except Exception:
+        text = (url or "").lower()
+        return "x.com/" in text or "twitter.com/" in text
 
 def _fallback_title_from_url(url: str) -> str:
     try:
-        path = (urlparse((url or "").strip()).path or "").strip("/")
+        parsed = urlparse((url or "").strip())
+        host = (parsed.hostname or "").lower()
+        path = (parsed.path or "").strip("/")
         parts = [x for x in path.split("/") if x]
+
+        if host in ("x.com", "www.x.com", "twitter.com", "www.twitter.com", "mobile.twitter.com"):
+            return "X Media"
 
         if len(parts) >= 2 and parts[0] in ("p", "reel", "reels", "tv"):
             kind = parts[0]
@@ -40,9 +52,9 @@ def _fallback_title_from_url(url: str) -> str:
         if len(parts) >= 3 and parts[0] == "stories":
             return f"Instagram Story @{parts[1]}"
 
-        return "Instagram Media"
+        return "Media"
     except Exception:
-        return "Instagram Media"
+        return "Media"
 
 
 def title_gallerydl(path: str, prefix: str, url: str = "") -> str:
@@ -105,6 +117,25 @@ def _pick_latest_media_file(since_ts: float, prefix: str) -> str | None:
     except Exception:
         return None
 
+def _collect_media_files_recursive(root_dir: str) -> list[str]:
+    exts = (".mp4", ".mp3", ".jpg", ".jpeg", ".png", ".webp")
+    files = []
+
+    try:
+        for root, _, names in os.walk(root_dir):
+            for name in names:
+                if not name.lower().endswith(exts):
+                    continue
+                p = os.path.join(root, name)
+                if not os.path.isfile(p):
+                    continue
+                files.append(p)
+    except Exception:
+        return []
+
+    files.sort(key=lambda p: os.path.getmtime(p))
+    return files
+    
 def _pick_latest_media_file_recursive(root_dir: str) -> str | None:
     exts = (".mp4", ".mp3", ".jpg", ".jpeg", ".png", ".webp")
     try:
@@ -161,10 +192,7 @@ async def gallerydl_fallback(
         if COOKIES_PATH and os.path.exists(COOKIES_PATH):
             cmd += ["--cookies", COOKIES_PATH]
 
-        cmd += [
-            "-o", "extractor.instagram.filename={username}_{caption[0:50]}.{extension}",
-            url,
-        ]
+        cmd += [url]
 
         print("\n[GALLERY-DL CMD]")
         print(" ".join(cmd))
@@ -191,29 +219,33 @@ async def gallerydl_fallback(
         if proc.returncode != 0:
             return None
 
-        picked = _pick_latest_media_file_recursive(job_dir)
-        if not picked or not os.path.exists(picked):
+        files = _collect_media_files_recursive(job_dir)
+        if not files:
             print("[GALLERY-DL] no downloaded media file found")
             return None
 
-        final_name = f"{job_id}_{os.path.basename(picked)}"
-        final_path = os.path.join(TMP_DIR, final_name)
+        moved_items = []
+        for src in files:
+            final_name = f"{job_id}_{os.path.basename(src)}"
+            final_path = os.path.join(TMP_DIR, final_name)
 
-        if os.path.abspath(picked) != os.path.abspath(final_path):
-            if os.path.exists(final_path):
-                stem, ext = os.path.splitext(final_name)
-                final_path = os.path.join(TMP_DIR, f"{stem}_{uuid.uuid4().hex[:6]}{ext}")
-            shutil.move(picked, final_path)
+            if os.path.abspath(src) != os.path.abspath(final_path):
+                if os.path.exists(final_path):
+                    stem, ext = os.path.splitext(final_name)
+                    final_path = os.path.join(TMP_DIR, f"{stem}_{uuid.uuid4().hex[:6]}{ext}")
+                shutil.move(src, final_path)
 
-        if not os.path.exists(final_path):
-            print("[GALLERY-DL] moved file missing:", final_path)
-            return None
+            moved_items.append({
+                "path": final_path,
+                "title": title_gallerydl(final_path, job_id, url),
+            })
 
-        title = title_gallerydl(final_path, job_id, url)
+        if len(moved_items) == 1:
+            return moved_items[0]
 
         return {
-            "path": final_path,
-            "title": title,
+            "items": moved_items,
+            "title": _fallback_title_from_url(url),
         }
 
     except Exception as e:
@@ -289,6 +321,7 @@ async def ytdlp_download(
     out_tpl = f"{TMP_DIR}/{job_id}_%(title)s.%(ext)s"
     update_interval = 3
     is_ig = is_instagram_url(url)
+    is_x = is_x_url(url)
 
     async def run(cmd):
         nonlocal update_interval
@@ -378,6 +411,17 @@ async def ytdlp_download(
             return None
 
     else:
+        if is_x:
+            fallback = await gallerydl_fallback(
+                url=url,
+                job_id=job_id,
+                bot=bot,
+                chat_id=chat_id,
+                status_msg_id=status_msg_id,
+            )
+            if fallback:
+                return fallback
+
         if format_id:
             if has_audio:
                 fmt = format_id

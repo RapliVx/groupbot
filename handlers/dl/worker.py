@@ -2,11 +2,14 @@ import os
 import uuid
 import html
 import subprocess
+import asyncio
 
 from .constants import TMP_DIR, MAX_TG_SIZE
 from .utils import detect_media_type
 from .ytdlp import ytdlp_download
-from .instagram_api import is_instagram_url, instagram_api_download, send_instagram_result
+from telegram import InputMediaPhoto, InputMediaVideo
+from telegram.error import RetryAfter
+from .instagram_api import is_instagram_url, instagram_api_download
 from .youtube_api import is_youtube_url, sonzai_youtube_download
 
 def reencode_mp3(src_path: str) -> str:
@@ -88,7 +91,85 @@ def _build_safe_photo_caption(title: str, bot_name: str, max_len: int = 1024) ->
     short_title = clean_title[:allowed].rstrip() + "..."
     return f"{prefix}{html.escape(short_title)}{closing}{suffix}"
 
+async def _send_media_group_result(
+    bot,
+    chat_id,
+    reply_to,
+    result: dict,
+):
+    items = result.get("items") or []
+    if not items:
+        raise RuntimeError("Album result kosong")
 
+    title = (result.get("title") or "Media").strip() or "Media"
+    bot_name = (await bot.get_me()).first_name or "Bot"
+    caption = _build_safe_photo_caption(title, bot_name)
+
+    chunk_size = 10
+    cooldown = 3
+    chunks = [items[i:i + chunk_size] for i in range(0, len(items), chunk_size)]
+
+    for idx, chunk in enumerate(chunks):
+        media = []
+        handles = []
+
+        try:
+            for i, item in enumerate(chunk):
+                file_path = item.get("path")
+                if not file_path or not os.path.exists(file_path):
+                    continue
+
+                media_type = detect_media_type(file_path)
+                fh = open(file_path, "rb")
+                handles.append(fh)
+
+                is_first = idx == 0 and i == 0
+                item_caption = caption if is_first else None
+                item_parse_mode = "HTML" if is_first else None
+
+                if media_type == "video":
+                    media.append(
+                        InputMediaVideo(
+                            media=fh,
+                            caption=item_caption,
+                            parse_mode=item_parse_mode,
+                            supports_streaming=True,
+                        )
+                    )
+                else:
+                    media.append(
+                        InputMediaPhoto(
+                            media=fh,
+                            caption=item_caption,
+                            parse_mode=item_parse_mode,
+                        )
+                    )
+
+            if not media:
+                continue
+
+            while True:
+                try:
+                    await bot.send_media_group(
+                        chat_id=chat_id,
+                        media=media,
+                        reply_to_message_id=reply_to if idx == 0 else None,
+                    )
+                    break
+                except RetryAfter as e:
+                    wait_time = int(getattr(e, "retry_after", cooldown)) + 1
+                    await asyncio.sleep(wait_time)
+
+            if idx < len(chunks) - 1:
+                await asyncio.sleep(cooldown)
+
+        finally:
+            for fh in handles:
+                try:
+                    fh.close()
+                except Exception:
+                    pass
+                    
 async def send_downloaded_media(
     bot,
     chat_id,
@@ -105,7 +186,7 @@ async def send_downloaded_media(
             parse_mode="HTML",
         )
 
-        await send_instagram_result(
+        await _send_media_group_result(
             bot=bot,
             chat_id=chat_id,
             reply_to=reply_to,
