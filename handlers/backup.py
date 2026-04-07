@@ -36,13 +36,13 @@ def _init_db():
 
 
 def _get_setting(key: str, default: str = "0") -> str:
+    _init_db()
     with _get_db() as db:
         cur = db.execute("SELECT value FROM settings WHERE key = ?", (key,))
-        row = cur.fetchone()
-        return row[0] if row else default
 
 
 def _set_setting(key: str, value: str):
+    _init_db()
     with _get_db() as db:
         db.execute(
             "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
