@@ -3,6 +3,9 @@ import logging
 import aiohttp
 import sqlite3
 import re
+import hashlib
+import urllib.parse
+from bs4 import BeautifulSoup
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import ContextTypes
 
@@ -10,6 +13,8 @@ log = logging.getLogger(__name__)
 
 MANGADEX_API = "https://api.mangadex.org"
 UPLOADS_URL = "https://uploads.mangadex.org"
+
+MAID_URL = "https://www.maid.my.id"
 
 NH_API_URL = "https://nhentai.net/api/v2"
 
@@ -402,6 +407,187 @@ async def manga_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=keyboard
             )
 
+    elif data.startswith("maiddet_"):
+        parts = data.split("_")
+        short_id = parts[1]
+
+        offset = int(parts[2]) if len(parts) > 2 else 0
+        
+        path = context.user_data.get(f"maid_map_{short_id}")
+        if not path: 
+            return await query.answer("❌ Sesi pencarian habis.", show_alert=True)
+        
+        await query.answer(f"Memuat chapter {offset+1}-{offset+5}... ⏳")
+        
+        html = await fetch_html(f"{MAID_URL}{path}")
+        if not html: return await query.answer("❌ Gagal memuat halaman.")
+        
+        soup = BeautifulSoup(html, 'html.parser')
+
+        title_tag = soup.select_one('.series-title h2, .series-titlex h2')
+        title = title_tag.text.strip() if title_tag else "Judul Tidak Diketahui"
+        
+        desc_tag = soup.select_one('.series-synops')
+        desc = desc_tag.text.strip() if desc_tag else "Tidak ada deskripsi."
+        
+        cover_tag = soup.select_one('.series-thumb img')
+        cover_url = cover_tag.get('src') if cover_tag else None
+
+        all_chapters = soup.select('.series-chapterlist li a')
+        total_ch = len(all_chapters)
+        
+        keyboard = []
+ 
+        for i, ch in enumerate(all_chapters):
+            ch_url = ch.get('href', '')
+            ch_path = ch_url.replace(MAID_URL, "")
+
+            ch_span = ch.find('span')
+            if ch_span:
+                date_span = ch_span.find('span', class_='date')
+                if date_span: date_span.extract()
+                ch_num = ch_span.text.strip().replace("Chapter ", "").replace("chapter ", "").strip()
+            else:
+                ch_num = "?"
+                
+            ch_sid = hashlib.md5(ch_path.encode()).hexdigest()[:8]
+            context.user_data[f"maid_map_{ch_sid}"] = ch_path
+
+            n_sid = hashlib.md5(all_chapters[i-1].get('href').replace(MAID_URL, "").encode()).hexdigest()[:8] if i > 0 else None
+            p_sid = hashlib.md5(all_chapters[i+1].get('href').replace(MAID_URL, "").encode()).hexdigest()[:8] if i < total_ch - 1 else None
+            
+            context.user_data[f"maid_ctx_{ch_sid}"] = {
+                'next_ch': n_sid,
+                'prev_ch': p_sid,
+                'title': title,
+                'ch_num': ch_num
+            }
+
+            if offset <= i < offset + 5:
+                keyboard.append([InlineKeyboardButton(f"📖 Ch. {ch_num}", callback_data=f"maidread_{ch_sid}")])
+
+        list_nav = []
+        if offset > 0:
+            list_nav.append(InlineKeyboardButton("⬅️ Newer", callback_data=f"maiddet_{short_id}_{offset - 5}"))
+        if offset + 5 < total_ch:
+            list_nav.append(InlineKeyboardButton("Older ➡️", callback_data=f"maiddet_{short_id}_{offset + 5}"))
+        
+        if list_nav:
+            keyboard.append(list_nav)
+
+        keyboard.append([InlineKeyboardButton("❌ Tutup", callback_data="close_manga")])
+        
+        caption = f"📚 **{title}**\n\n📝 {desc[:300]}...\n\n🗂 _Menampilkan chapter {offset+1} - {min(offset+5, total_ch)} dari {total_ch}_"
+        
+        if query.message.photo:
+            await query.edit_message_caption(caption=caption, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
+        else:
+            if cover_url:
+                await query.message.delete()
+                await context.bot.send_photo(query.message.chat_id, photo=cover_url, caption=caption, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
+            else:
+                await query.edit_message_text(caption, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
+
+    elif data.startswith("maidread_"):
+        await query.answer("Membuka chapter... ⏳")
+        short_id = data.split("_")[1]
+        
+        path = context.user_data.get(f"maid_map_{short_id}")
+        if not path: 
+            return await context.bot.send_message(query.message.chat_id, "❌ Sesi chapter habis. Silakan cari ulang.")
+
+        ctx = context.user_data.get(f"maid_ctx_{short_id}", {})
+        manga_title = ctx.get('title', 'Manga Maid')
+        ch_num = ctx.get('ch_num', '?')
+        
+        target_url = f"{MAID_URL}{path}" if path.startswith("/") else f"{MAID_URL}/{path}"
+        html = await fetch_html(target_url)
+        
+        if not html: 
+            return await context.bot.send_message(query.message.chat_id, "❌ Gagal memuat chapter.")
+        
+        soup = BeautifulSoup(html, 'html.parser')
+        img_tags = soup.select('#readerarea img, .reader-area img, .chapter-image img, .mangareader img')
+        
+        urls = []
+        for img in img_tags:
+            src = img.get('data-src') or img.get('data-lazy-src') or img.get('src')
+            if src and src.startswith("http"):
+                urls.append(src)
+        
+        if not urls:
+            return await context.bot.send_message(query.message.chat_id, "❌ Halaman kosong (Sistem proteksi web).")
+
+        cache_key = f"maid_imgs_{short_id}"
+        context.user_data[cache_key] = urls
+        
+        img_bytes = await fetch_image_bytes(urls[0], referer=MAID_URL)
+        if not img_bytes: 
+            return await context.bot.send_message(query.message.chat_id, "❌ Error mendownload gambar.")
+
+        nav = [
+            InlineKeyboardButton(f"📄 1/{len(urls)}", callback_data="ignore"),
+            InlineKeyboardButton("Next ➡️", callback_data=f"maidnav_{short_id}_1")
+        ]
+        
+        ch_nav = []
+        if ctx.get('prev_ch'):
+            ch_nav.append(InlineKeyboardButton("⏪ Ch Prev", callback_data=f"maidread_{ctx['prev_ch']}"))
+        ch_nav.append(InlineKeyboardButton("❌ Tutup", callback_data="close_manga"))
+        if ctx.get('next_ch'):
+            ch_nav.append(InlineKeyboardButton("Ch Next ⏩", callback_data=f"maidread_{ctx['next_ch']}"))
+            
+        keyboard = InlineKeyboardMarkup([nav, ch_nav])
+        caption = f"📖 **{manga_title}**\n🔖 Ch. {ch_num}"
+        
+        if hasattr(query, 'edit_message_media'):
+            try:
+                await query.edit_message_media(media=InputMediaPhoto(media=img_bytes, caption=caption, parse_mode="Markdown"), reply_markup=keyboard)
+            except:
+                await query.message.delete()
+                await context.bot.send_photo(query.message.chat_id, photo=img_bytes, caption=caption, parse_mode="Markdown", reply_markup=keyboard)
+        else:
+            await context.bot.send_photo(query.message.chat_id, photo=img_bytes, caption=caption, parse_mode="Markdown", reply_markup=keyboard)
+
+    elif data.startswith("maidnav_"):
+        parts = data.split("_")
+        short_id = parts[1]
+        page_idx = int(parts[2])
+        
+        urls = context.user_data.get(f"maid_imgs_{short_id}")
+        if not urls: 
+            return await query.answer("❌ Sesi baca habis.", show_alert=True)
+            
+        ctx = context.user_data.get(f"maid_ctx_{short_id}", {})
+        manga_title = ctx.get('title', 'Manga Maid')
+        ch_num = ctx.get('ch_num', '?')
+        
+        await query.answer()
+        img_bytes = await fetch_image_bytes(urls[page_idx], referer=MAID_URL)
+        
+        if img_bytes:
+            nav = []
+            if page_idx > 0:
+                nav.append(InlineKeyboardButton("⬅️ Prev", callback_data=f"maidnav_{short_id}_{page_idx - 1}"))
+            nav.append(InlineKeyboardButton(f"📄 {page_idx + 1}/{len(urls)}", callback_data="ignore"))
+            if page_idx < len(urls) - 1:
+                nav.append(InlineKeyboardButton("Next ➡️", callback_data=f"maidnav_{short_id}_{page_idx + 1}"))
+                
+            ch_nav = []
+            if ctx.get('prev_ch'):
+                ch_nav.append(InlineKeyboardButton("⏪ Ch Prev", callback_data=f"maidread_{ctx['prev_ch']}"))
+            ch_nav.append(InlineKeyboardButton("❌ Tutup", callback_data="close_manga"))
+            if ctx.get('next_ch'):
+                ch_nav.append(InlineKeyboardButton("Ch Next ⏩", callback_data=f"maidread_{ctx['next_ch']}"))
+                
+            keyboard = InlineKeyboardMarkup([nav, ch_nav])
+            caption = f"📖 **{manga_title}**\n🔖 Ch. {ch_num}"
+            
+            await query.edit_message_media(
+                media=InputMediaPhoto(media=img_bytes, caption=caption, parse_mode="Markdown"),
+                reply_markup=keyboard
+            )
+
     elif data.startswith("nhsearch_"):
         page = int(data.split("_")[1])
         q = context.user_data.get("last_nh_query", "")
@@ -502,3 +688,58 @@ async def manga_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 log.error(f"Gagal edit foto nhentai: {e}")
                 await query.message.delete()
                 await context.bot.send_photo(query.message.chat_id, photo=img_bytes, caption=caption_text, parse_mode="HTML", reply_markup=keyboard)
+
+async def fetch_html(url):
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+    try:
+        async with aiohttp.ClientSession(headers=headers) as session:
+            async with session.get(url) as response:
+                if response.status == 200:
+                    return await response.text()
+    except Exception as e:
+        log.error(f"Error fetch HTML Maid: {e}")
+    return None
+
+async def maid_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        return await update.message.reply_text("⚠️ Gunakan:\n`/maid <judul>`", parse_mode="Markdown")
+
+    query = " ".join(context.args)
+    msg = await update.message.reply_text(f"🔍 Mencari `{query}` di Maid-Manga...", parse_mode="Markdown")
+
+    url = f"{MAID_URL}/?s={urllib.parse.quote(query)}"
+    html = await fetch_html(url)
+    
+    if not html:
+        return await msg.edit_text("❌ Gagal menghubungi server Maid-Manga.")
+
+    soup = BeautifulSoup(html, 'html.parser')
+    keyboard = []
+    hasil_unik = set()
+    
+    items = soup.select('a[href*="/manga/"], a[href*="/komik/"]')
+    
+    for link_tag in items:
+        href = link_tag.get('href', '')
+        title = link_tag.get('title') or link_tag.text.strip()
+        title = " ".join(title.split())
+        
+        if not title or href in hasil_unik:
+            continue
+            
+        hasil_unik.add(href)
+        
+        path = href.replace(MAID_URL, "")
+        
+        short_id = hashlib.md5(path.encode()).hexdigest()[:8]
+        context.user_data[f"maid_map_{short_id}"] = path
+        
+        keyboard.append([InlineKeyboardButton(f"📖 {title[:35]}", callback_data=f"maiddet_{short_id}")])
+        if len(keyboard) >= 5:
+            break
+
+    if not keyboard:
+        return await msg.edit_text("❌ Manga tidak ditemukan di Maid-Manga.")
+
+    keyboard.append([InlineKeyboardButton("❌ Tutup", callback_data="close_manga")])
+    await msg.edit_text(f"🔍 **Maid-Manga Search:** `{query}`", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
