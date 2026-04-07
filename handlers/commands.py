@@ -33,7 +33,7 @@ from handlers.quotly import q_cmd
 from handlers.kang import kang_cmd
 from handlers.setting import setting_cmd
 from handlers.dl.instagram_scrape import ig_cmd
-from handlers.backup import backup_cmd, restore_cmd
+from handlers.backup import backup_cmd, restore_cmd, autobackup_cmd
 
 from handlers.caca import (
     meta_query,
@@ -63,6 +63,7 @@ COMMAND_HANDLERS = [
     ("start", start_cmd, True),
     ("settings", setting_cmd, False),
     ("backup", backup_cmd, True),
+    ("autobackup", autobackup_cmd, True),
     ("restore", restore_cmd, True),
     ("q", q_cmd, False),
     ("ig", ig_cmd, False),
