@@ -34,6 +34,13 @@ def _init_db():
             )
         """)
 
+        cur = db.execute("SELECT value FROM settings WHERE key = 'auto_backup'")
+        if not cur.fetchone():
+            db.execute(
+                "INSERT INTO settings (key, value) VALUES (?, ?)",
+                ("auto_backup", "0")
+            )
+
 
 def _get_setting(key: str, default: str = "0") -> str:
     _init_db()
