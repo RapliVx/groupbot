@@ -340,18 +340,17 @@ async def build_nh_search_list(query: str, page: int, context: ContextTypes.DEFA
 async def manga_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args or len(context.args) < 2:
         help_txt = (
-            "⚠️ **Waduh, format perintahnya kurang tepat nih!** 😅\n\n"
-            "Biar bot bisa nyariin komiknya, pastikan formatmu seperti ini:\n"
-            "📖 `/manga <kode_sumber> <judul/angka>`\n\n"
-            "🗂️ **Daftar Kode Sumber:**\n"
-            "🔹 `dex`  — MangaDex\n"
-            "🔹 `maid` — MangaMaid\n"
-            "🔹 `nh`   — nhentai\n\n"
-            "💡 **Contoh Biar Nggak Bingung:**\n"
+            " **Code Format:**\n"
+            " `/manga <source> <title/nuke_code>`\n\n"
+            " **Source List:**\n"
+            " `dex`  — MangaDex\n"
+            " `maid` — MangaMaid\n"
+            " `nh`   — nhentai\n\n"
+            " **Example:**\n"
             "• `/manga dex Haimiya-senpai`\n"
             "• `/manga maid Osananajimi wo Onnanoko`\n"
-            "• `/manga nh Azur Lane` *(Cari dari judul)*\n"
-            "• `/manga nh 177013` *(Langsung pakai 6 digit angka)*"
+            "• `/manga nh Zenles Zone Zero` *(Search Title)*\n"
+            "• `/manga nh 177013` *(Use 6 Digit Code / Nuclear Code)*"
         )
         return await update.message.reply_text(help_txt, parse_mode="Markdown")
 
