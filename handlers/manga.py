@@ -11,6 +11,13 @@ from bs4 import BeautifulSoup
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import ContextTypes
 
+# --- IMPORT BARU UNTUK ANTI-CLOUDFLARE ---
+try:
+    from curl_cffi.requests import AsyncSession as CurlSession
+except ImportError:
+    CurlSession = None
+    logging.warning("curl_cffi tidak terinstall! Bypass Cloudflare Maid-Manga mungkin gagal. (pip install curl_cffi)")
+
 try:
     from PIL import Image
 except ImportError:
@@ -84,9 +91,44 @@ async def fetch_json(url, params=None, custom_headers=None):
         log.error(f"Error fetch JSON: {e}")
     return None
 
+async def fetch_html(url):
+    """Mengambil HTML dengan TLS Fingerprint Chrome untuk bypass perlindungan ketat"""
+    if CurlSession is None:
+        log.error("Membutuhkan curl_cffi untuk fetch_html Maid.")
+        return None
+        
+    try:
+        async with CurlSession(impersonate="chrome120") as session:
+            headers = {
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9,id;q=0.8",
+                "Referer": "https://www.google.com/"
+            }
+            response = await session.get(url, headers=headers, timeout=25)
+            if response.status_code == 200:
+                return response.text
+            else:
+                log.warning(f"Fetch HTML gagal. HTTP Status: {response.status_code} URL: {url}")
+                return None
+    except Exception as e:
+        log.error(f"Error fetch HTML Maid (Cloudflare bypass): {type(e).__name__} - {e}")
+    return None
+
 async def fetch_image_bytes(url, referer="https://mangadex.org/"):
+    """Mengambil bytes gambar, menggunakan curl_cffi khusus untuk MAID_URL jika perlu"""
+    if "maid.my.id" in url and CurlSession is not None:
+        try:
+            async with CurlSession(impersonate="chrome120") as session:
+                headers = {"Referer": referer}
+                response = await session.get(url, headers=headers, timeout=20)
+                if response.status_code == 200:
+                    return response.content
+        except Exception as e:
+            log.error(f"Error fetch gambar via curl_cffi: {type(e).__name__} - {e}")
+            return None
+            
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Referer": referer
     }
     session = await get_session()
@@ -98,16 +140,6 @@ async def fetch_image_bytes(url, referer="https://mangadex.org/"):
         log.error(f"Error fetch gambar: {e}")
     return None
 
-async def fetch_html(url):
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36"}
-    session = await get_session()
-    try:
-        async with session.get(url, headers=headers, timeout=10) as response:
-            if response.status == 200:
-                return await response.text()
-    except Exception as e:
-        log.error(f"Error fetch HTML Maid: {e}")
-    return None
 
 def enforce_telegram_photo_limits(img_bytes):
     # Reduces the resolution (resamples) of an image without cropping it, Telegram requirements: W + H <= 10,000px & Maximum ratio 1:20.
@@ -307,14 +339,21 @@ async def build_nh_search_list(query: str, page: int, context: ContextTypes.DEFA
 async def manga_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args or len(context.args) < 2:
         help_txt = (
-            "⚠️ **Format Salah!**\n\n"
-            "Gunakan: `/manga <sumber> <judul/kode>`\n\n"
-            "📚 **Sumber:** `dex` | `maid` | `nh`\n"
-            "💡 **Example:**\n"
-            "`/manga dex Haimiya-senpai`\n"
-            "`/manga maid Osananajimi wo Onnanoko`\n"
-            "`/manga nh Zenles Zone Zero Or 642563`\n"
-        )
+                    "❌ **Format Perintah Tidak Sesuai**\n\n"
+                    "Gunakan format berikut untuk mencari komik:\n"
+                    "👉 `/manga <sumber> <judul_atau_kode>`\n\n"
+                    "📚 **Daftar Sumber yang Tersedia:**\n"
+                    "• `dex`  : MangaDex\n"
+                    "• `maid` : MangaMaid\n"
+                    "• `nh`   : nhentai\n\n"
+                    "💡 **Contoh Penggunaan:**\n"
+                    "Mencari berdasarkan judul:\n"
+                    "`/manga dex Haimiya-senpai`\n"
+                    "`/manga maid Osananajimi wo Onnanoko`\n"
+                    "`/manga nh Zenless Zone Zero`\n\n"
+                    "Membaca langsung dengan kode:\n"
+                    "`/manga nh 642563`"
+                )
         return await update.message.reply_text(help_txt, parse_mode="Markdown")
 
     source = context.args[0].lower()
@@ -332,7 +371,7 @@ async def manga_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         url = f"{MAID_URL}/?s={urllib.parse.quote(full_query)}"
         html = await fetch_html(url)
         if not html:
-            return await msg.edit_text("❌ Gagal menghubungi server Maid-Manga.")
+            return await msg.edit_text("❌ Gagal menghubungi server Maid-Manga (Situs mungkin diblokir Cloudflare).")
 
         soup = BeautifulSoup(html, 'html.parser')
         keyboard = []
@@ -346,7 +385,9 @@ async def manga_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not title or href in hasil_unik: continue
             hasil_unik.add(href)
             
-            path = href.replace(MAID_URL, "")
+            parsed_url = urllib.parse.urlparse(href)
+            path = parsed_url.path
+            
             short_id = hashlib.md5(path.encode()).hexdigest()[:8]
             context.user_data[f"maid_map_{short_id}"] = path
             
@@ -527,7 +568,9 @@ async def manga_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
  
         for i, ch in enumerate(all_chapters):
             ch_url = ch.get('href', '')
-            ch_path = ch_url.replace(MAID_URL, "")
+            parsed_ch = urllib.parse.urlparse(ch_url)
+            ch_path = parsed_ch.path
+            
             ch_span = ch.find('span')
             if ch_span:
                 date_span = ch_span.find('span', class_='date')
@@ -539,8 +582,8 @@ async def manga_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ch_sid = hashlib.md5(ch_path.encode()).hexdigest()[:8]
             context.user_data[f"maid_map_{ch_sid}"] = ch_path
 
-            n_sid = hashlib.md5(all_chapters[i-1].get('href').replace(MAID_URL, "").encode()).hexdigest()[:8] if i > 0 else None
-            p_sid = hashlib.md5(all_chapters[i+1].get('href').replace(MAID_URL, "").encode()).hexdigest()[:8] if i < total_ch - 1 else None
+            n_sid = hashlib.md5(urllib.parse.urlparse(all_chapters[i-1].get('href')).path.encode()).hexdigest()[:8] if i > 0 else None
+            p_sid = hashlib.md5(urllib.parse.urlparse(all_chapters[i+1].get('href')).path.encode()).hexdigest()[:8] if i < total_ch - 1 else None
             
             context.user_data[f"maid_ctx_{ch_sid}"] = {
                 'next_ch': n_sid, 'prev_ch': p_sid, 'title': title, 'ch_num': ch_num
