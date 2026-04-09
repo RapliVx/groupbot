@@ -3,6 +3,8 @@
 import os
 import socket
 import logging
+import asyncio
+import uvicorn
 from telegram import Update
 from telegram.ext import ApplicationBuilder, JobQueue
 
@@ -12,6 +14,14 @@ from handlers.callbacks import register_callbacks
 from handlers.messages import register_messages
 from utils.startup import startup_tasks
 from utils.config import BOT_TOKEN
+
+# === IMPORT APP DASHBOARD ===
+try:
+    from dashboard import app as fastapi_app, ws_handler  # <-- Tambahkan ws_handler di sini
+    DASHBOARD_ENABLED = True
+except ImportError:
+    DASHBOARD_ENABLED = False
+    print("⚠️ dashboard.py tidak ditemukan! Menjalankan bot tanpa dashboard.")
 
 BOT_USERNAME = None
 
@@ -144,8 +154,21 @@ async def post_shutdown(app):
     log.info("HTTP session closed")
 
 
+async def run_fastapi():
+    if not DASHBOARD_ENABLED:
+        return
+    config = uvicorn.Config(app=fastapi_app, host="0.0.0.0", port=8000, log_level="warning")
+    server = uvicorn.Server(config)
+    await server.serve()
+
+
 def main():
     setup_logger()
+
+    if DASHBOARD_ENABLED:
+        root_logger = logging.getLogger()
+        root_logger.addHandler(ws_handler)
+
     log.info("Initializing bot")
 
     app = _build_application()
@@ -160,15 +183,25 @@ def main():
     banner = r"""
  ／l、
 （ﾟ､ ｡ ７   < Nya~ Master! Bot waking up…
-  l  ~ヽ       • Loading neko engine
-  じしf_, )     • Warming up whiskers
+ l  ~ヽ       • Loading neko engine
+ じしf_, )    • Warming up whiskers
                • Injecting kawaii into memory…
  💖 Ready to serve!
 """
-
     print(banner)
 
     log.info("Handlers registered")
+
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
+    if DASHBOARD_ENABLED:
+        loop.create_task(run_fastapi())
+        log.info("🌐 Dashboard Web Is Running In: http://127.0.0.1:8000")
+
     log.info("Polling started")
 
     app.run_polling(
