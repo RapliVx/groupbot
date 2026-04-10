@@ -22,7 +22,6 @@
     </script>
 
     <style>
-        /* --- TEMA DINAMIS --- */
         :root {
             --md-sys-color-primary: #a8c7fa;
             --md-sys-color-primary-container: #004a77;
@@ -35,12 +34,11 @@
         body[data-theme="light"] { --base-bg: #fdfcff; --base-surface: #ebeef5; --text-main: #1a1c1e; --text-muted: #44474e; }
 
         body {
-            --md-sys-color-background: color-mix(in srgb, var(--md-sys-color-primary) 4%, var(--base-bg));
+            --md-sys-color-background: color-mix(in srgb, var(--md-sys-color-primary) 5%, var(--base-bg));
             --md-sys-color-surface: color-mix(in srgb, var(--md-sys-color-primary) 10%, var(--base-surface));
             --md-sys-color-surface-variant: color-mix(in srgb, var(--md-sys-color-primary) 16%, var(--base-surface));
-            --md-border-color: color-mix(in srgb, var(--md-sys-color-primary) 25%, transparent);
             --md-sys-color-on-background: var(--text-main);
-            --md-terminal-bg: color-mix(in srgb, var(--md-sys-color-primary) 8%, #000000);
+            --md-terminal-bg: color-mix(in srgb, var(--md-sys-color-primary) 6%, #000000);
 
             font-family: 'Roboto', sans-serif; background-color: var(--md-sys-color-background);
             color: var(--md-sys-color-on-background); margin: 0; padding: 0; height: 100vh; overflow: hidden;
@@ -61,10 +59,9 @@
         .status-badge {
             display: flex; align-items: center; gap: 6px;
             background-color: color-mix(in srgb, #6dd58c 15%, transparent); color: #6dd58c;
-            padding: 6px 14px; border-radius: 20px; font-weight: 500; font-size: 14px;
-            border: 1px solid color-mix(in srgb, #6dd58c 30%, transparent);
+            padding: 6px 14px; border-radius: 100px; font-weight: 500; font-size: 14px;
         }
-        .status-badge.offline { background-color: color-mix(in srgb, #f2b8b5 15%, transparent); color: #f2b8b5; border-color: color-mix(in srgb, #f2b8b5 30%, transparent); }
+        .status-badge.offline { background-color: color-mix(in srgb, #ffb4ab 15%, transparent); color: #ffb4ab; }
 
         .content-area { flex: 1; overflow-y: auto; padding: 0 16px 90px 16px; scrollbar-width: none; }
         .content-area::-webkit-scrollbar { display: none; }
@@ -79,18 +76,18 @@
         @media (min-width: 768px) { .system-top-grid { grid-template-columns: 1fr 1fr; } }
         
         .distro-card-large {
-            background-color: color-mix(in srgb, var(--md-sys-color-primary) 8%, var(--base-surface));
-            border-radius: 24px; padding: 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
-            border: 1px solid var(--md-border-color); transition: background-color 0.5s ease, border-color 0.5s ease;
+            background-color: var(--md-sys-color-surface);
+            border-radius: 28px; padding: 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+            transition: background-color 0.5s ease;
         }
-        @media (min-width: 768px) { .distro-card-large { padding: 32px; border-radius: 28px; } }
+        @media (min-width: 768px) { .distro-card-large { padding: 32px; border-radius: 32px; } }
 
         .os-logo-large {
             width: 80px; height: 80px; margin-bottom: 16px; background-color: color-mix(in srgb, var(--md-sys-color-primary) 12%, transparent);
-            border-radius: 20px; padding: 16px; box-sizing: border-box; border: 1px solid color-mix(in srgb, var(--md-sys-color-primary) 20%, transparent);
+            border-radius: 24px; padding: 16px; box-sizing: border-box; 
             display: flex; justify-content: center; align-items: center;
         }
-        @media (min-width: 768px) { .os-logo-large { width: 100px; height: 100px; margin-bottom: 20px; border-radius: 24px; padding: 18px; } }
+        @media (min-width: 768px) { .os-logo-large { width: 100px; height: 100px; margin-bottom: 20px; border-radius: 28px; padding: 18px; } }
         .os-logo-large img { width: 100%; height: 100%; object-fit: contain; }
         
         .system-side-col { display: flex; flex-direction: column; gap: 16px; }
@@ -98,26 +95,25 @@
 
         /* BOT PROFILE CARD */
         .bot-profile-card {
-            display: flex; flex-direction: column; align-items: center; text-align: center; gap: 16px; padding: 20px; border-radius: 24px;
-            background-color: var(--md-sys-color-surface); border: 1px solid var(--md-border-color); margin-bottom: 16px;
+            display: flex; flex-direction: column; align-items: center; text-align: center; gap: 16px; padding: 20px; border-radius: 28px;
+            background-color: var(--md-sys-color-surface); margin-bottom: 16px; transition: background-color 0.5s ease;
         }
-        @media (min-width: 768px) { .bot-profile-card { flex-direction: row; text-align: left; gap: 24px; padding: 24px; border-radius: 28px; } }
+        @media (min-width: 768px) { .bot-profile-card { flex-direction: row; text-align: left; gap: 24px; padding: 24px; border-radius: 32px; } }
 
         .bot-avatar { width: 64px; height: 64px; border-radius: 50%; background-color: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); display: flex; justify-content: center; align-items: center; overflow: hidden; flex-shrink: 0; font-size: 32px; }
         @media (min-width: 768px) { .bot-avatar { width: 80px; height: 80px; font-size: 36px; } }
         .bot-avatar img { width: 100%; height: 100%; object-fit: cover; }
         
-        /* BOT BADGES (Tengah di Mobile, Rata Kiri di PC) */
+        /* BOT BADGES */
         .bot-badges { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
         @media (min-width: 768px) { .bot-badges { justify-content: flex-start; } }
-        .badge-chip { display: flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 8px; font-size: 13px; }
-        .badge-chip.primary { color: var(--md-sys-color-primary); font-weight: 500; background-color: color-mix(in srgb, var(--md-sys-color-primary) 10%, transparent); }
-        .badge-chip.muted { color: var(--text-muted); font-family: monospace; background-color: var(--md-sys-color-surface-variant); }
+        .badge-chip { display: flex; align-items: center; gap: 4px; padding: 6px 12px; border-radius: 100px; font-size: 13px; }
+        .badge-chip.primary { color: var(--md-sys-color-primary); font-weight: 500; background-color: color-mix(in srgb, var(--md-sys-color-primary) 12%, transparent); }
+        .badge-chip.muted { color: var(--text-main); font-family: monospace; background-color: var(--md-sys-color-surface-variant); }
 
         /* PREMIUM USERS LIST */
-        .premium-item { display: flex; align-items: center; gap: 16px; padding: 12px 16px; background-color: var(--md-sys-color-surface-variant); border-radius: 16px; border: 1px solid color-mix(in srgb, var(--md-sys-color-primary) 10%, transparent); }
-        .premium-avatar { width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0; background-color: color-mix(in srgb, #e6c229 15%, transparent); color: #e6c229; display: flex; justify-content: center; align-items: center; overflow: hidden; border: 1px solid color-mix(in srgb, #e6c229 30%, transparent); }
-        @media (min-width: 768px) { .premium-avatar { width: 44px; height: 44px; border-width: 2px;} }
+        .premium-item { display: flex; align-items: center; gap: 16px; padding: 12px 16px; background-color: var(--md-sys-color-surface-variant); border-radius: 24px; }
+        .premium-avatar { width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0; background-color: color-mix(in srgb, #e6c229 15%, transparent); color: #e6c229; display: flex; justify-content: center; align-items: center; overflow: hidden; }
         .premium-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
         .premium-info { flex: 1; min-width: 0; }
         .premium-name { font-weight: 500; font-size: 15px; color: var(--text-main); margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
@@ -127,8 +123,8 @@
         .cards-grid { display: grid; grid-template-columns: 1fr; gap: 16px; margin-top: 16px; margin-bottom: 24px; }
         @media (min-width: 600px) { .cards-grid { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); } }
 
-        .md-card { background-color: var(--md-sys-color-surface); border-radius: 20px; padding: 20px; border: 1px solid var(--md-border-color); display: flex; flex-direction: column; justify-content: center; transition: background-color 0.5s ease, border-color 0.5s ease; }
-        @media (min-width: 768px) { .md-card { border-radius: 24px; padding: 22px; } }
+        .md-card { background-color: var(--md-sys-color-surface); border-radius: 24px; padding: 20px; display: flex; flex-direction: column; justify-content: center; transition: background-color 0.5s ease; }
+        @media (min-width: 768px) { .md-card { border-radius: 28px; padding: 24px; } }
         
         .card-header { display: flex; align-items: center; gap: 8px; color: var(--md-sys-color-primary); font-size: 14px; margin-bottom: 12px; font-weight: 500; }
         .card-value { font-size: 28px; font-weight: 700; color: var(--text-main); margin-bottom: 4px; }
@@ -136,52 +132,48 @@
         @media (min-width: 768px) { .card-header { font-size: 15px; } .card-value { font-size: 32px; } .card-value.medium { font-size: 20px; } }
 
         .card-subtitle { font-size: 13px; color: var(--text-muted); }
-        .progress-track { background-color: var(--md-sys-color-surface-variant); height: 6px; border-radius: 6px; overflow: hidden; margin-top: 12px; }
-        .progress-fill { background-color: var(--md-sys-color-primary); height: 100%; transition: width 0.4s ease; }
+        .progress-track { background-color: var(--md-sys-color-surface-variant); height: 8px; border-radius: 8px; overflow: hidden; margin-top: 12px; }
+        .progress-fill { background-color: var(--md-sys-color-primary); height: 100%; transition: width 0.4s ease, border-radius 0.3s; border-radius: 8px; }
         .card-net { font-size: 16px; color: var(--md-sys-color-tertiary); font-weight: 500; display: flex; align-items: center; gap: 8px; }
-        @media (min-width: 768px) { .progress-track { height: 8px; border-radius: 8px;} .card-net { font-size: 18px; } }
+        @media (min-width: 768px) { .card-net { font-size: 18px; } }
 
         .runtime-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
-        .rt-chip { display: flex; justify-content: space-between; align-items: center; background-color: var(--md-sys-color-surface-variant); border: 1px solid var(--md-border-color); padding: 8px 12px; border-radius: 12px; font-size: 12px; }
-        @media (min-width: 768px) { .rt-chip { padding: 10px 14px; font-size: 13px; } }
+        .rt-chip { display: flex; justify-content: space-between; align-items: center; background-color: var(--md-sys-color-surface-variant); padding: 10px 14px; border-radius: 16px; font-size: 12px; }
+        @media (min-width: 768px) { .rt-chip { font-size: 13px; } }
         .rt-val { color: var(--md-sys-color-primary); font-family: monospace; font-weight: 600; }
 
         /* --- TERMINAL --- */
-        .terminal-wrapper { background-color: var(--md-terminal-bg); border-radius: 20px; border: 1px solid var(--md-border-color); overflow: hidden; display: flex; flex-direction: column; height: calc(100vh - 160px); margin-top: 16px; }
-        @media (min-width: 768px) { .terminal-wrapper { border-radius: 24px; height: calc(100vh - 180px); } }
-        .activity-header { padding: 14px 16px; border-bottom: 1px solid var(--md-border-color); display: flex; justify-content: space-between; align-items: center; background-color: color-mix(in srgb, var(--md-sys-color-primary) 8%, transparent); }
-        @media (min-width: 768px) { .activity-header { padding: 16px 20px; } }
+        .terminal-wrapper { background-color: var(--md-terminal-bg); border-radius: 24px; overflow: hidden; display: flex; flex-direction: column; height: calc(100vh - 160px); margin-top: 16px; transition: background-color 0.5s ease; }
+        @media (min-width: 768px) { .terminal-wrapper { border-radius: 28px; height: calc(100vh - 180px); } }
+        .activity-header { padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; background-color: color-mix(in srgb, var(--md-sys-color-primary) 8%, transparent); }
         .activity-body { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
-        @media (min-width: 768px) { .activity-body { padding: 16px; } }
-        .log-item { display: flex; gap: 12px; padding: 12px; border-radius: 16px; align-items: center; background-color: color-mix(in srgb, var(--md-sys-color-primary) 4%, transparent); border: 1px solid color-mix(in srgb, var(--md-sys-color-primary) 8%, transparent); }
-        @media (min-width: 768px) { .log-item { gap: 16px; padding: 14px; } }
-        .log-icon { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background-color: color-mix(in srgb, var(--md-sys-color-primary) 12%, transparent); }
-        @media (min-width: 768px) { .log-icon { width: 44px; height: 44px; } }
+        @media (min-width: 768px) { .activity-body { padding: 16px; gap: 12px; } }
+        .log-item { display: flex; gap: 12px; padding: 12px; border-radius: 20px; align-items: center; background-color: color-mix(in srgb, var(--md-sys-color-primary) 5%, transparent); }
+        @media (min-width: 768px) { .log-item { gap: 16px; padding: 16px; } }
+        .log-icon { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background-color: color-mix(in srgb, var(--md-sys-color-primary) 12%, transparent); }
+        @media (min-width: 768px) { .log-icon { width: 48px; height: 48px; } }
         .log-content { flex: 1; min-width: 0; }
         .log-text { font-size: 13px; color: #e2e2e9; line-height: 1.4; word-wrap: break-word; }
         @media (min-width: 768px) { .log-text { font-size: 14px; } }
-        .log-badge { font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px; margin-right: 4px; vertical-align: middle; }
-        @media (min-width: 768px) { .log-badge { font-size: 11px; padding: 3px 8px; border-radius: 6px; margin-right: 6px; } }
+        .log-badge { font-size: 10px; font-weight: 600; padding: 3px 8px; border-radius: 100px; margin-right: 6px; vertical-align: middle; }
+        @media (min-width: 768px) { .log-badge { font-size: 11px; padding: 4px 10px; } }
         .badge-cmd { background-color: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); }
-        .badge-reply { background-color: color-mix(in srgb, var(--md-sys-color-tertiary) 15%, transparent); color: var(--md-sys-color-tertiary); }
-        .log-time { font-size: 11px; color: color-mix(in srgb, var(--md-sys-color-primary) 40%, #8e9099); white-space: nowrap; }
+        .badge-reply { background-color: color-mix(in srgb, var(--md-sys-color-tertiary) 20%, transparent); color: var(--md-sys-color-tertiary); }
+        .log-time { font-size: 11px; color: color-mix(in srgb, var(--md-sys-color-primary) 50%, #8e9099); white-space: nowrap; }
         @media (min-width: 768px) { .log-time { font-size: 12px; } }
 
         /* --- SETTINGS UI --- */
-        .theme-toggle-bar { display: flex; background-color: var(--md-sys-color-surface-variant); border-radius: 100px; padding: 4px; gap: 4px; margin-top: 16px; border: 1px solid var(--md-border-color); }
-        @media (min-width: 768px) { .theme-toggle-bar { padding: 6px; } }
-        .theme-btn { flex: 1; display: flex; justify-content: center; align-items: center; padding: 10px 0; border-radius: 100px; color: var(--text-main); opacity: 0.6; transition: all 0.3s ease; }
-        @media (min-width: 768px) { .theme-btn { padding: 12px 0; } }
+        .theme-toggle-bar { display: flex; background-color: var(--md-sys-color-surface-variant); border-radius: 100px; padding: 6px; gap: 4px; margin-top: 16px; }
+        .theme-btn { flex: 1; display: flex; justify-content: center; align-items: center; padding: 12px 0; border-radius: 100px; color: var(--text-main); opacity: 0.6; transition: all 0.3s ease; }
         .theme-btn.active { background-color: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); opacity: 1; }
 
-        .color-picker-scroll { display: flex; gap: 12px; overflow-x: auto; padding: 16px 4px 16px 4px; scrollbar-width: none; margin: 0 -4px; }
+        .color-picker-scroll { display: flex; gap: 16px; overflow-x: auto; padding: 16px 4px 24px 4px; scrollbar-width: none; margin: 0 -4px; }
         .color-picker-scroll::-webkit-scrollbar { display: none; }
-        @media (min-width: 768px) { .color-picker-scroll { gap: 16px; padding: 16px 8px 24px 8px; margin: 0 -8px; } }
+        @media (min-width: 768px) { .color-picker-scroll { gap: 20px; padding: 16px 8px 32px 8px; margin: 0 -8px; } }
 
-        /* HAPUS SHADOW DI COLOR ITEM */
-        .color-item { width: 64px; height: 64px; border-radius: 20px; background-color: var(--md-sys-color-surface-variant); display: flex; justify-content: center; align-items: center; border: 2px solid transparent; flex-shrink: 0; transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
-        @media (min-width: 768px) { .color-item { width: 72px; height: 72px; border-radius: 24px; border-width: 3px; } }
-        .color-item.active { border-color: var(--md-sys-color-primary); transform: scale(1.05); } /* Box shadow removed */
+        .color-item { width: 64px; height: 64px; border-radius: 24px; background-color: var(--md-sys-color-surface-variant); display: flex; justify-content: center; align-items: center; flex-shrink: 0; transition: transform 0.3s cubic-bezier(0.2, 0, 0, 1); }
+        @media (min-width: 768px) { .color-item { width: 72px; height: 72px; border-radius: 28px; } }
+        .color-item.active { transform: scale(1.15); background-color: var(--md-sys-color-primary-container); } 
         .color-circle { width: 40px; height: 40px; border-radius: 50%; display: flex; justify-content: center; align-items: center; overflow: hidden; }
         @media (min-width: 768px) { .color-circle { width: 44px; height: 44px; } }
         .color-dot { width: 16px; height: 16px; border-radius: 50%; display: flex; justify-content: center; align-items: center; }
@@ -189,33 +181,38 @@
         .color-dot .material-symbols-outlined { font-size: 14px; color: #111; display: none; }
         .color-item.active .color-dot .material-symbols-outlined { display: block; }
 
-        .restart-btn { margin-top: 16px; width: 100%; padding: 16px; border-radius: 16px; background-color: color-mix(in srgb, #f2b8b5 12%, transparent); color: #f2b8b5; border: 1px solid color-mix(in srgb, #f2b8b5 20%, transparent); display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 500; font-size: 15px; transition: 0.3s; }
-        @media (min-width: 768px) { .restart-btn { padding: 18px; border-radius: 20px; font-weight: 600; font-size: 16px; gap: 12px; } }
-        .restart-btn:active { transform: scale(0.98); background-color: color-mix(in srgb, #f2b8b5 20%, transparent); }
+        .restart-btn { 
+            margin-top: 16px; width: 100%; padding: 18px; border-radius: 24px; 
+            background-color: color-mix(in srgb, #ffb4ab 15%, transparent); color: #ffb4ab; 
+            display: flex; align-items: center; justify-content: center; gap: 8px; 
+            font-weight: 600; font-size: 16px; transition: 0.3s;
+            border: none; outline: none; font-family: inherit;
+        }
+        @media (min-width: 768px) { .restart-btn { padding: 20px; gap: 12px; } }
+        .restart-btn:hover { background-color: color-mix(in srgb, #ffb4ab 22%, transparent); }
+        .restart-btn:active { transform: scale(0.97); background-color: color-mix(in srgb, #ffb4ab 30%, transparent); }
 
         /* --- ANDROID NOTIFICATION (SNACKBAR) --- */
-        #android-toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%) translateY(100px); background-color: var(--md-sys-color-surface-variant); color: var(--text-main); padding: 12px 20px; border-radius: 100px; display: flex; align-items: center; gap: 12px; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.3); transition: transform 0.4s cubic-bezier(0.2, 0, 0, 1), opacity 0.4s; opacity: 0; pointer-events: none; min-width: 200px; border: 1px solid var(--md-border-color); font-size: 14px; }
-        @media (min-width: 768px) { #android-toast { bottom: 100px; padding: 14px 24px; min-width: 250px; font-size: 15px; } }
+        #android-toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%) translateY(100px); background-color: var(--md-sys-color-surface-variant); color: var(--text-main); padding: 14px 24px; border-radius: 100px; display: flex; align-items: center; gap: 12px; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.3); transition: transform 0.4s cubic-bezier(0.2, 0, 0, 1), opacity 0.4s; opacity: 0; pointer-events: none; min-width: 200px; font-size: 14px; }
+        @media (min-width: 768px) { #android-toast { bottom: 100px; font-size: 15px; min-width: 250px; } }
         #android-toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
 
-        /* --- FLOATING NAV (SOLID BACKGROUND, HIDE ON SCROLL) --- */
+        /* --- FLOATING NAV --- */
         .floating-nav-container { position: fixed; bottom: 16px; left: 0; right: 0; display: flex; justify-content: center; pointer-events: none; z-index: 100; transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
         .floating-nav-container.nav-hidden { transform: translateY(150%); }
         @media (min-width: 768px) { .floating-nav-container { bottom: 24px; } .floating-nav-container.nav-hidden { transform: none !important; } }
         
-        .floating-nav { background-color: var(--md-sys-color-surface-variant); border: 1px solid var(--md-border-color); border-radius: 100px; padding: 6px; display: flex; gap: 2px; pointer-events: auto; box-shadow: 0 4px 16px rgba(0,0,0,0.15); transition: background-color 0.5s ease, border-color 0.5s ease; }
-        @media (min-width: 768px) { .floating-nav { padding: 8px; gap: 4px; box-shadow: 0 8px 32px rgba(0,0,0,0.2); } }
-
-        .nav-item { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 16px; border-radius: 100px; color: var(--text-main); opacity: 0.7; font-weight: 500; font-size: 14px; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); user-select: none; }
+        .floating-nav { background-color: var(--md-sys-color-surface-variant); border-radius: 100px; padding: 8px; display: flex; gap: 4px; pointer-events: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.2); transition: background-color 0.5s ease; }
+        
+        .nav-item { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 20px; border-radius: 100px; color: var(--text-main); opacity: 0.7; font-weight: 500; font-size: 14px; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); user-select: none; }
         @media (min-width: 768px) { .nav-item { padding: 14px 24px; } }
         .nav-item.active { background-color: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); opacity: 1; }
         @media (min-width: 768px) { .nav-item.active { padding: 14px 28px; } }
 
-        /* Hide text on mobile */
         @media (max-width: 600px) {
             .nav-item span:not(.material-symbols-outlined) { display: none; }
-            .nav-item { padding: 12px 20px; }
-            .nav-item.active { padding: 12px 20px; }
+            .nav-item { padding: 14px 22px; }
+            .nav-item.active { padding: 14px 22px; }
         }
     </style>
 </head>
@@ -267,27 +264,27 @@
                         <span id="bot-avatar-fallback" class="material-symbols-outlined">smart_toy</span>
                     </div>
                     <div style="flex: 1; width: 100%;">
-                        <div class="card-subtitle" style="margin-bottom: 2px;">Bot Identity</div>
+                        <div class="card-subtitle" style="margin-bottom: 4px;">Bot Identity</div>
                         <div id="bot-name" style="font-size: 20px; font-weight: 600; color: var(--text-main); margin-bottom: 12px;">Menghubungkan...</div>
                         
                         <div class="bot-badges">
                             <div class="badge-chip primary">
-                                <span class="material-symbols-outlined" style="font-size: 14px;">alternate_email</span> <span id="bot-username">--</span>
+                                <span class="material-symbols-outlined" style="font-size: 16px;">alternate_email</span> <span id="bot-username">--</span>
                             </div>
                             <div class="badge-chip muted">
-                                <span class="material-symbols-outlined" style="font-size: 14px;">badge</span> <span id="bot-id">--</span>
+                                <span class="material-symbols-outlined" style="font-size: 16px;">badge</span> <span id="bot-id">--</span>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="md-card" style="padding: 20px;">
-                    <div class="card-header" style="margin-bottom: 12px;">
+                <div class="md-card" style="padding: 24px;">
+                    <div class="card-header" style="margin-bottom: 16px;">
                         <span class="material-symbols-outlined" style="color: #e6c229;">stars</span> Premium Users
                     </div>
-                    <div id="premium-list" style="display: flex; flex-direction: column; gap: 8px;">
+                    <div id="premium-list" style="display: flex; flex-direction: column; gap: 12px;">
                         <div style="text-align: center; color: var(--text-muted); font-size: 13px; padding: 16px;">
-                            <span class="material-symbols-outlined" style="font-size: 28px; opacity: 0.5; display: block; margin-bottom: 8px;">sync</span>
+                            <span class="material-symbols-outlined" style="font-size: 32px; opacity: 0.5; display: block; margin-bottom: 8px;">sync</span>
                             Memuat data database...
                         </div>
                     </div>
@@ -339,17 +336,17 @@
             <div id="tab-logs" class="tab-content">
                 <div class="terminal-wrapper">
                     <div class="activity-header">
-                        <span style="font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 6px; color: var(--md-sys-color-primary);">
-                            <span class="material-symbols-outlined" style="font-size: 18px;">bolt</span> Bot Activity Feed
+                        <span style="font-size: 15px; font-weight: 500; display: flex; align-items: center; gap: 8px; color: var(--md-sys-color-primary);">
+                            <span class="material-symbols-outlined" style="font-size: 20px;">bolt</span> Bot Activity Feed
                         </span>
-                        <div class="ripple-surface" style="color: var(--text-muted); padding: 6px; border-radius: 50%; display: flex;" onclick="clearLogs()">
+                        <div class="ripple-surface" style="color: var(--text-muted); padding: 8px; border-radius: 50%; display: flex;" onclick="clearLogs()">
                             <md-ripple></md-ripple>
                             <span class="material-symbols-outlined" style="font-size: 20px;">delete</span>
                         </div>
                     </div>
                     <div id="log-box" class="activity-body">
                         <div id="log-placeholder" style="text-align: center; color: var(--text-muted); margin-top: 40px; font-size: 13px;">
-                            <span class="material-symbols-outlined" style="font-size: 40px; opacity: 0.5; margin-bottom: 12px; display: block;">hourglass_empty</span>
+                            <span class="material-symbols-outlined" style="font-size: 48px; opacity: 0.5; margin-bottom: 16px; display: block;">hourglass_empty</span>
                             Menunggu aktivitas pengguna dari Telegram...
                         </div>
                     </div>
@@ -362,19 +359,19 @@
                     <div class="theme-toggle-bar">
                         <div id="mode-auto" class="theme-btn ripple-surface" onclick="setMode('auto')">
                             <md-ripple></md-ripple>
-                            <span class="material-symbols-outlined" style="font-size: 20px;">brightness_medium</span>
+                            <span class="material-symbols-outlined" style="font-size: 22px;">brightness_medium</span>
                         </div>
                         <div id="mode-light" class="theme-btn ripple-surface" onclick="setMode('light')">
                             <md-ripple></md-ripple>
-                            <span class="material-symbols-outlined" style="font-size: 20px;">light_mode</span>
+                            <span class="material-symbols-outlined" style="font-size: 22px;">light_mode</span>
                         </div>
                         <div id="mode-dark" class="theme-btn ripple-surface" onclick="setMode('dark')">
                             <md-ripple></md-ripple>
-                            <span class="material-symbols-outlined" style="font-size: 20px;">dark_mode</span>
+                            <span class="material-symbols-outlined" style="font-size: 22px;">dark_mode</span>
                         </div>
                         <div id="mode-oled" class="theme-btn ripple-surface" onclick="setMode('oled')">
                             <md-ripple></md-ripple>
-                            <span class="material-symbols-outlined" style="font-size: 20px;">lens</span>
+                            <span class="material-symbols-outlined" style="font-size: 22px;">lens</span>
                         </div>
                     </div>
                 </div>
@@ -387,7 +384,7 @@
 
                     <button class="restart-btn ripple-surface" onclick="triggerRestart()">
                         <md-ripple></md-ripple>
-                        <span class="material-symbols-outlined" style="font-size: 20px;">restart_alt</span>
+                        <span class="material-symbols-outlined" style="font-size: 22px;">restart_alt</span>
                         Restart System
                     </button>
                 </div>
@@ -430,7 +427,6 @@
         let currentMode = localStorage.getItem('nekoMode') || 'dark'; 
         let currentColor = localStorage.getItem('nekoColor') || 'blue';
 
-        // --- SISTEM SCROLL AUTO-HIDE NAVBAR DI MOBILE ---
         let lastScrollTop = 0;
         const contentArea = document.getElementById('main-content');
         const navContainer = document.getElementById('nav-container');
@@ -439,9 +435,9 @@
             if (window.innerWidth < 768) {
                 let st = contentArea.scrollTop;
                 if (st > lastScrollTop && st > 50) {
-                    navContainer.classList.add('nav-hidden'); // Scroll Down
+                    navContainer.classList.add('nav-hidden'); 
                 } else if (st < lastScrollTop) {
-                    navContainer.classList.remove('nav-hidden'); // Scroll Up
+                    navContainer.classList.remove('nav-hidden'); 
                 }
                 lastScrollTop = st <= 0 ? 0 : st;
             }
@@ -589,7 +585,7 @@
                             data.premium_users.forEach(u => {
                                 const usernameHtml = u.username ? `<span style="color: var(--md-sys-color-primary); font-weight: 500;">@${u.username}</span>` : '';
                                 
-                                const avatarStyle = u.photo ? `padding: 0; background-color: transparent; border: 1px solid color-mix(in srgb, #e6c229 30%, transparent);` : '';
+                                const avatarStyle = u.photo ? `padding: 0; background-color: transparent;` : '';
                                 const avatarContent = u.photo 
                                     ? `<img src="${u.photo}">`
                                     : `<span class="material-symbols-outlined" style="font-size: 20px;">workspace_premium</span>`;
@@ -652,7 +648,7 @@
                     const logEntry = document.createElement('div');
                     logEntry.className = 'log-item';
                     logEntry.innerHTML = `
-                        <div class="log-icon" style="${iconColor}"><span class="material-symbols-outlined" style="font-size: 18px;">${iconName}</span></div>
+                        <div class="log-icon" style="${iconColor}"><span class="material-symbols-outlined" style="font-size: 20px;">${iconName}</span></div>
                         <div class="log-content"><div class="log-text"><span class="log-badge ${badgeClass}">${badgeText}</span> ${cleanText}</div></div>
                         <div class="log-time">${timeStr}</div>`;
                     
