@@ -2,8 +2,6 @@ import os
 import logging
 import asyncio
 import aiohttp
-import sqlite3
-import re
 import hashlib
 import urllib.parse
 from io import BytesIO
@@ -11,6 +9,9 @@ from bs4 import BeautifulSoup
 from database.premium import is_premium
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import ContextTypes
+from telegram.error import BadRequest, RetryAfter
+
+from database.nsfw_db import is_nsfw_allowed
 
 try:
     from curl_cffi.requests import AsyncSession as CurlSession
@@ -31,8 +32,6 @@ UPLOADS_URL = "https://uploads.mangadex.org"
 MAID_URL = "https://www.maid.my.id"
 NH_API_URL = "https://nhentai.net/api/v2"
 
-NSFW_DB = "data/nsfw.sqlite3"
-
 _http_session = None
 
 async def get_session():
@@ -41,36 +40,6 @@ async def get_session():
         connector = aiohttp.TCPConnector(limit=100, enable_cleanup_closed=True)
         _http_session = aiohttp.ClientSession(connector=connector)
     return _http_session
-
-_NSFW_CACHE = {}
-
-def _nsfw_db_init():
-    os.makedirs("data", exist_ok=True)
-    with sqlite3.connect(NSFW_DB) as con:
-        con.execute("PRAGMA journal_mode=WAL;")
-        con.execute("PRAGMA synchronous=NORMAL;")
-        con.execute("""
-            CREATE TABLE IF NOT EXISTS nsfw_groups (
-                chat_id INTEGER PRIMARY KEY,
-                enabled INTEGER NOT NULL DEFAULT 1,
-                updated_at REAL NOT NULL
-            )
-        """)
-
-def _is_nsfw_enabled(chat_id: int, chat_type: str) -> bool:
-    if chat_type == "private":
-        return True
-
-    if chat_id in _NSFW_CACHE:
-        return _NSFW_CACHE[chat_id]
-
-    _nsfw_db_init()
-    with sqlite3.connect(NSFW_DB) as con:
-        cur = con.execute("SELECT enabled FROM nsfw_groups WHERE chat_id=?", (int(chat_id),))
-        row = cur.fetchone()
-        is_enabled = bool(row and int(row[0]) == 1)
-        _NSFW_CACHE[chat_id] = is_enabled
-        return is_enabled
 
 NH_API_KEY = os.getenv("NH_API")
 NH_HEADERS = {"User-Agent": "PrivateMangaBot/3.0 (Telegram Bot)"}
@@ -358,7 +327,6 @@ async def manga_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     full_query = " ".join(context.args[1:])
     msg = await update.message.reply_text(f"🔍 Memproses `{full_query}` di {source.upper()}...", parse_mode="Markdown")
     
-    # [PROTECTION] Daftarkan siapa pemilik command ini
     context.chat_data[f"manga_owner_{msg.message_id}"] = update.effective_user.id
 
     if source in ["dex", "mangadex"]:
@@ -372,7 +340,7 @@ async def manga_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         url = f"{MAID_URL}/?s={urllib.parse.quote(full_query)}"
         html = await fetch_html(url)
         if not html:
-            return await msg.edit_text("❌ Gagal menghubungi server Maid-Manga (Situs mungkin diblokir Cloudflare).")
+            return await msg.edit_text("❌ Gagal menghubungi server Maid-Manga.")
 
         soup = BeautifulSoup(html, 'html.parser')
         keyboard = []
@@ -413,7 +381,7 @@ async def manga_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return await msg.edit_text(help_premium, parse_mode="Markdown")
 
         chat = update.effective_chat 
-        if not _is_nsfw_enabled(chat.id, chat.type):
+        if not is_nsfw_allowed(chat.id, chat.type):
             return await msg.edit_text("❌ Fitur NSFW dimatikan di grup ini.")
 
         if full_query.isdigit():
@@ -778,5 +746,5 @@ async def manga_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         title = g_data["title"]["pretty"] or g_data["title"]["english"]
         caption_text = f"🔞 <b>{title[:100]}</b>\n📄 Hal: {page_idx + 1}/{len(pages)}"
         
-        is_edit = action == "nhnav_" and hasattr(query, 'edit_message_media')
+        is_edit = hasattr(query, 'edit_message_media') 
         await safe_render_page(query, context, img_bytes, caption_text, keyboard, is_edit)
